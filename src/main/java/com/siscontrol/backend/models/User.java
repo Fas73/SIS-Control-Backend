@@ -1,43 +1,29 @@
-package com.siscontrol.backend.entity;
-
-import java.time.LocalDateTime;
+package com.siscontrol.backend.models;
 
 import com.siscontrol.backend.enums.UserRole;
 import com.siscontrol.backend.enums.UserStatus;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length =   50)
+    @Column(nullable = false, unique = true, length = 50)
     private String username;
 
-    @Column(nullable = false, unique = true, length = 100 )
+    @Column(nullable = false, unique = true, length = 100)
     private String email;
 
     @Column(nullable = false, length = 255)
@@ -54,13 +40,14 @@ public class User {
     @Column(nullable = false)
     private UserStatus status = UserStatus.ACTIVE;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAT;
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
-        this.createdAT = LocalDateTime.now();
+        createdAt = LocalDateTime.now();
+        if (status == null) {
+            status = UserStatus.ACTIVE;
+        }
     }
-
-    
 }
