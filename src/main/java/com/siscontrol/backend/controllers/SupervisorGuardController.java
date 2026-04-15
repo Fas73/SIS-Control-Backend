@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import com.siscontrol.backend.dto.SupervisorGuardResponseDTO;
 import com.siscontrol.backend.models.SupervisorGuard;
 import com.siscontrol.backend.services.SupervisorGuardService;
 
@@ -20,11 +21,11 @@ public class SupervisorGuardController {
             @RequestParam Long supervisorId,
             @RequestParam Long guardId
     ) {
-        return supervisorGuardService.asignarGuardiaASupervisor(supervisorId, guardId);
+        return supervisorGuardService.asignarGuardia(supervisorId, guardId);
     }
 
     @GetMapping("/{supervisorId}")
-    public List<SupervisorGuard> obtenerGuardiasDeSupervisor(@PathVariable Long supervisorId) {
+    public List<SupervisorGuardResponseDTO> obtenerGuardiasDeSupervisor(@PathVariable Long supervisorId) {
         return supervisorGuardService.obtenerGuardiasDeSupervisor(supervisorId);
     }
 

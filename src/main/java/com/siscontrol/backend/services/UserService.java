@@ -1,5 +1,6 @@
 package com.siscontrol.backend.services;
 
+import com.siscontrol.backend.dto.UserResponseDTO;
 import com.siscontrol.backend.models.User;
 import com.siscontrol.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,5 +26,17 @@ public class UserService {
 
     public User guardarUsuario(User user) {
         return userRepository.save(user);
+    }
+
+    public UserResponseDTO convertirAResponseDTO(User user) {
+        return new UserResponseDTO(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getRole().name(),
+                user.getStatus().name(),
+                user.getCreatedAt() != null ? user.getCreatedAt().toString() : null
+        );
     }
 }

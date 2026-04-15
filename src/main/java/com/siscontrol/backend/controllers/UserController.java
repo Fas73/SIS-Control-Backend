@@ -5,7 +5,7 @@ import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.*;
 
-
+import com.siscontrol.backend.dto.UserResponseDTO;
 import com.siscontrol.backend.models.User;
 import com.siscontrol.backend.services.UserService;
 
@@ -17,9 +17,10 @@ public class UserController {
     private UserService userService;
 
     @PostMapping
-    public ResponseEntity<User> crearUsuario(@RequestBody User user) {
+    public ResponseEntity<UserResponseDTO> crearUsuario(@RequestBody User user) {
         User nuevoUsuario = userService.guardarUsuario(user);
-        return ResponseEntity.ok(nuevoUsuario);
+        UserResponseDTO response = userService.convertirAResponseDTO(nuevoUsuario);
+        return ResponseEntity.ok(response);
     }
 
     
