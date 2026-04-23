@@ -12,6 +12,8 @@ import com.siscontrol.backend.models.SupervisorGuardId;
 import com.siscontrol.backend.models.User;
 import com.siscontrol.backend.repositories.SupervisorGuardRepository;
 import com.siscontrol.backend.repositories.UserRepository;
+import com.siscontrol.backend.exception.BadRequestException;
+import com.siscontrol.backend.exception.ResourceNotFoundException;
 
 @Service
 public class SupervisorGuardService {
@@ -27,17 +29,17 @@ public class SupervisorGuardService {
 
     public SupervisorGuard asignarGuardia(Long supervisorId, Long guardId) {
         User supervisor = userRepository.findById(supervisorId)
-                .orElseThrow(() -> new RuntimeException("Supervisor no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Supervisor no encontrado"));
         
         User guard = userRepository.findById(guardId)
-                .orElseThrow(() -> new RuntimeException("Guardia no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Guardia no encontrado"));
 
         if (supervisor.getRole() != UserRole.SUPERVISOR) {
-            throw new RuntimeException("El usuario asignado no es un supervisor");
+            throw new BadRequestException("El usuario asignado no es un supervisor");
         }
         
         if (guard.getRole() != UserRole.GUARD) {
-            throw new RuntimeException("El usuario asignado no es una guardia");
+            throw new BadRequestException("El usuario asignado no es una guardia");
         }
 
         SupervisorGuard relacion = new SupervisorGuard();
@@ -50,7 +52,7 @@ public class SupervisorGuardService {
 
     public List<SupervisorGuardResponseDTO> obtenerGuardiasDeSupervisor(Long supervisorId) {
         User supervisor = userRepository.findById(supervisorId)
-                .orElseThrow(() -> new RuntimeException("Supervisor no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Supervisor no encontrado"));
         
         return supervisorGuardRepository.findBySupervisor(supervisor)
                 .stream()
