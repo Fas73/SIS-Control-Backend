@@ -45,12 +45,16 @@ public class UserService {
         );
     }
 
-    public UserResponseDTO crearUsuario(Long adminId, CreateUserRequestDTO request) {
-        User admin = userRepository.findById(adminId)
-                .orElseThrow(() -> new ResourceNotFoundException("Admin no encontrado"));
+    public UserResponseDTO crearUsuario(Long creatorId, CreateUserRequestDTO request) {
+        User creator = userRepository.findById(creatorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario creador no encontrado"));
 
-        if (!admin.getRole().name().equals("ADMIN")) {
-            throw new ForbiddenException("solo los admin pueden crear usuarios");
+        boolean isAdmin = creator.getRole() == UserRole.ADMIN;
+
+        boolean isSupervisorCreatingGuard = creator.getRole() == UserRole.SUPERVISOR && request.getRole() == UserRole.GUARD;
+        
+        if (!isAdmin && !isSupervisorCreatingGuard) {
+            throw new ForbiddenException("No tienes permisos para crear este tipo de usuario");
         }
 
         if (request.getUsername() == null || request.getUsername().isBlank()) {

@@ -22,8 +22,8 @@ public class UserController {
     private UserService userService;
 
     @PostMapping
-    public ResponseEntity<UserResponseDTO> crearUsuario(@RequestParam Long adminId, @RequestBody CreateUserRequestDTO request) {
-        UserResponseDTO nuevoUsuario = userService.crearUsuario(adminId, request);
+    public ResponseEntity<UserResponseDTO> crearUsuario(@RequestParam Long creatorId, @RequestBody CreateUserRequestDTO request) {
+        UserResponseDTO nuevoUsuario = userService.crearUsuario(creatorId, request);
         return ResponseEntity.ok(nuevoUsuario);
     }
 
