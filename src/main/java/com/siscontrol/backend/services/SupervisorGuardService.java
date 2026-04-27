@@ -27,27 +27,38 @@ public class SupervisorGuardService {
     @Autowired
     private UserService userService;
 
-    public SupervisorGuard asignarGuardia(Long supervisorId, Long guardId) {
+    public SupervisorGuardResponseDTO asignarGuardia(Long supervisorId, Long guardId) {
         User supervisor = userRepository.findById(supervisorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supervisor no encontrado"));
-        
+
         User guard = userRepository.findById(guardId)
                 .orElseThrow(() -> new ResourceNotFoundException("Guardia no encontrado"));
 
         if (supervisor.getRole() != UserRole.SUPERVISOR) {
             throw new BadRequestException("El usuario asignado no es un supervisor");
         }
-        
+
         if (guard.getRole() != UserRole.GUARD) {
-            throw new BadRequestException("El usuario asignado no es una guardia");
+            throw new BadRequestException("El usuario asignado no es un guardia");
+        }
+
+        SupervisorGuardId relationId = new SupervisorGuardId(supervisorId, guardId);
+
+        if (supervisorGuardRepository.existsById(relationId)) {
+            throw new BadRequestException("La relación supervisor-guardia ya existe");
         }
 
         SupervisorGuard relacion = new SupervisorGuard();
-        relacion.setId(new SupervisorGuardId(supervisorId, guardId));
+        relacion.setId(relationId);
         relacion.setSupervisor(supervisor);
         relacion.setGuard(guard);
 
-        return supervisorGuardRepository.save(relacion);
+        SupervisorGuard savedRelation = supervisorGuardRepository.save(relacion);
+
+        return new SupervisorGuardResponseDTO(
+                userService.convertirAResponseDTO(savedRelation.getSupervisor()),
+                userService.convertirAResponseDTO(savedRelation.getGuard())
+        );
     }
 
     public List<SupervisorGuardResponseDTO> obtenerGuardiasDeSupervisor(Long supervisorId) {

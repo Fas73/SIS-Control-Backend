@@ -2,6 +2,7 @@ package com.siscontrol.backend.services;
 
 import com.siscontrol.backend.dto.CreateUserRequestDTO;
 import com.siscontrol.backend.dto.UserResponseDTO;
+import com.siscontrol.backend.enums.UserRole;
 import com.siscontrol.backend.enums.UserStatus;
 import com.siscontrol.backend.exception.BadRequestException;
 import com.siscontrol.backend.exception.ForbiddenException;
@@ -13,6 +14,7 @@ import com.siscontrol.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -92,6 +94,27 @@ public class UserService {
 
 
 
+    }
+
+    public List<UserResponseDTO> listarTodos() {
+        return userRepository.findAll()
+                .stream()
+                .map(this::convertirAResponseDTO)
+                .toList();
+    }
+
+    public UserResponseDTO obtenerPorId(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        return convertirAResponseDTO(user);
+    }
+
+    public List<UserResponseDTO> obtenerPorRol(UserRole role) {
+        return userRepository.findByRole(role)
+                .stream()
+                .map(this::convertirAResponseDTO)
+                .toList();
     }
 
 
