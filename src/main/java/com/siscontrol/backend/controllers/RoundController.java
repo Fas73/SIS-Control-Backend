@@ -1,10 +1,11 @@
 package com.siscontrol.backend.controllers;
 
-import com.siscontrol.backend.models.Checklog;
-import com.siscontrol.backend.models.Installation;
-import com.siscontrol.backend.models.Checkpoint;
+import com.siscontrol.backend.dto.CheckpointDTO;
+import com.siscontrol.backend.models.*;
 import com.siscontrol.backend.services.RoundService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,26 +17,32 @@ public class RoundController {
     @Autowired
     private RoundService roundService;
 
-    // Crear Instalación: POST http://localhost:8080/api/rondas/instalaciones
     @PostMapping("/instalaciones")
-    public Installation crearInstalacion(@RequestBody Installation installation) {
-        return roundService.guardarInstalacion(installation);
+    public ResponseEntity<Installation> crearInstalacion(@RequestBody Installation installation) {
+        return new ResponseEntity<>(roundService.guardarInstalacion(installation), HttpStatus.CREATED);
     }
 
-    // Ver todas las instalaciones: GET http://localhost:8080/api/rondas/instalaciones
     @GetMapping("/instalaciones")
-    public List<Installation> listarInstalaciones() {
-        return roundService.obtenerTodasLasInstalaciones();
+    public ResponseEntity<List<Installation>> listarInstalaciones() {
+        return ResponseEntity.ok(roundService.obtenerTodasLasInstalaciones());
     }
 
-    // Crear Punto de Control: POST http://localhost:8080/api/rondas/checkpoints
     @PostMapping("/checkpoints")
-    public Checkpoint crearCheckpoint(@RequestBody Checkpoint checkpoint) {
-        return roundService.guardarCheckpoint(checkpoint);
+    public ResponseEntity<Checkpoint> crearCheckpoint(@RequestBody Checkpoint checkpoint) {
+        return new ResponseEntity<>(roundService.guardarCheckpoint(checkpoint), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/checkpoints/{installationId}")
+    public ResponseEntity<List<CheckpointDTO>> listarCheckpoints(@PathVariable Long installationId) {
+        List<CheckpointDTO> checkpoints = roundService.obtenerCheckpointsPorInstalacion(installationId);
+        if (checkpoints.isEmpty()) {
+            return ResponseEntity.noContent().build(); // 204 No Content
+        }
+        return ResponseEntity.ok(checkpoints);
     }
 
     @PostMapping("/escaneo")
-    public Checklog realizarEscaneo(@RequestBody Checklog log) {
-        return roundService.registrarEscaneo(log);
+    public ResponseEntity<Checklog> realizarEscaneo(@RequestBody Checklog log) {
+        return new ResponseEntity<>(roundService.registrarEscaneo(log), HttpStatus.CREATED);
     }
 }

@@ -1,25 +1,20 @@
 package com.siscontrol.backend.services;
 
-import com.siscontrol.backend.models.Checklog;
-import com.siscontrol.backend.models.Installation;
-import com.siscontrol.backend.models.Checkpoint;
-import com.siscontrol.backend.repositories.ChecklogRepository;
-import com.siscontrol.backend.repositories.InstallationRepository;
-import com.siscontrol.backend.repositories.CheckpointRepository;
+import com.siscontrol.backend.dto.CheckpointDTO;
+import com.siscontrol.backend.models.*;
+import com.siscontrol.backend.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class RoundService {
 
-    @Autowired
-    private InstallationRepository installationRepository;
+    @Autowired private InstallationRepository installationRepository;
+    @Autowired private CheckpointRepository checkpointRepository;
+    @Autowired private ChecklogRepository checklogRepository;
 
-    @Autowired
-    private CheckpointRepository checkpointRepository;
-
-    // --- Gestión de Instalaciones ---
     public Installation guardarInstalacion(Installation installation) {
         return installationRepository.save(installation);
     }
@@ -28,23 +23,19 @@ public class RoundService {
         return installationRepository.findAll();
     }
 
-    // --- Gestión de Puntos de Control ---
     public Checkpoint guardarCheckpoint(Checkpoint checkpoint) {
         return checkpointRepository.save(checkpoint);
     }
 
-    public List<Checkpoint> obtenerCheckpointsPorInstalacion(Long installationId) {
-        // Esto asume que tienes el método en el repositorio o usas un filtro simple
-        return checkpointRepository.findAll().stream()
-                .filter(c -> c.getInstallation() != null && c.getInstallation().getId().equals(installationId))
-                .toList();
+    // Método optimizado que devuelve DTOs
+    public List<CheckpointDTO> obtenerCheckpointsPorInstalacion(Long installationId) {
+        return checkpointRepository.findByInstallationId(installationId)
+                .stream()
+                .map(c -> new CheckpointDTO(c.getId(), c.getName(), c.getLocationDescription(), c.getNfcTagCode(), c.getInstallation().getId()))
+                .collect(Collectors.toList());
     }
 
-    @Autowired
-    private ChecklogRepository checklogRepository;
-
     public Checklog registrarEscaneo(Checklog log) {
-        // Seteamos la hora actual al momento del escaneo
         log.setTimestamp(java.time.LocalDateTime.now());
         return checklogRepository.save(log);
     }
