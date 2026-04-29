@@ -17,6 +17,6 @@ public class Checkpoint {
     private String nfcTagCode;
 
     @ManyToOne
-    @JoinColumn(name = "installation_id")
+    @JoinColumn(name = "installation_id") // o el nombre de tu columna
     private Installation installation;
 }

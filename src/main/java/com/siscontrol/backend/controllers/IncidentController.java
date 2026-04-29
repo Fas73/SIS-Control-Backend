@@ -18,16 +18,12 @@ public class IncidentController {
 
     @PostMapping
     public ResponseEntity<IncidentDTO> crearIncidente(@RequestBody IncidentDTO incidentDto) {
-        IncidentDTO nuevoIncidente = incidentService.reportarIncidente(incidentDto);
-        return new ResponseEntity<>(nuevoIncidente, HttpStatus.CREATED);
+        return new ResponseEntity<>(incidentService.reportarIncidente(incidentDto), HttpStatus.CREATED);
     }
 
     @GetMapping
     public ResponseEntity<List<IncidentDTO>> listarTodo() {
         List<IncidentDTO> incidentes = incidentService.obtenerTodos();
-        if (incidentes.isEmpty()) {
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.ok(incidentes);
+        return incidentes.isEmpty() ? ResponseEntity.noContent().build() : ResponseEntity.ok(incidentes);
     }
 }

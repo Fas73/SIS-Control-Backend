@@ -14,5 +14,10 @@ public class IncidentDTO {
     private String description;
     private String severity;
     private String imageUrl;
+    private String type; // Campo para el Enum
     private LocalDateTime createdAt;
+
+    // Campos para las relaciones
+    private Long roundExecutionId;
+    private Long checklogId; // Puede ser null
 }
