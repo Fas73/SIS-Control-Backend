@@ -1,150 +1,176 @@
 package com.siscontrol.backend.services;
 
-import com.siscontrol.backend.dto.CheckpointDTO;
+import com.siscontrol.backend.models.Checklog;
+import com.siscontrol.backend.models.Installation;
+import com.siscontrol.backend.models.RoundExecution;
+import com.siscontrol.backend.repositories.InstallationRepository;
+import com.siscontrol.backend.repositories.ChecklogRepository;
+import com.siscontrol.backend.repositories.RoundExecutionRepository;
+
+import com.siscontrol.backend.enums.*;
 import com.siscontrol.backend.models.*;
 import com.siscontrol.backend.repositories.*;
+import com.siscontrol.backend.exception.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class RoundService {
 
-    @Autowired private InstallationRepository installationRepository;
-    @Autowired private CheckpointRepository checkpointRepository;
-    @Autowired private ChecklogRepository checklogRepository;
+    @Autowired private ShiftRepository shiftRepository;
     @Autowired private RoundExecutionRepository roundExecutionRepository;
+    @Autowired private ChecklogRepository checklogRepository;
     @Autowired private IncidentRepository incidentRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private InstallationRepository installationRepository;
+    @Autowired private CheckpointRepository checkpointRepository; // Agregado para validar existencia de puntos
 
-    // --- Métodos de Gestión de Incidentes ---
+    // --- JORNADAS ---
+    public Map<String, Object> iniciarJornada(Long userId, Long installationId) {
+        User worker = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        if (worker.getRole() != UserRole.GUARD) throw new BadRequestException("Solo guardias inician jornada.");
 
-    public Incident registrarIncidente(Incident incident) {
-        // 1. Validar que el incidente tenga una ronda asociada
-        if (incident.getRoundExecution() == null || incident.getRoundExecution().getId() == null) {
-            throw new IllegalArgumentException("Error: El incidente debe estar asociado a una ejecución de ronda.");
-        }
+        if (shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO).isPresent())
+            throw new BadRequestException("Ya tienes una jornada en curso.");
 
-        // 2. BUSCAR LA RONDA COMPLETA en la base de datos
-        RoundExecution fullRound = roundExecutionRepository.findById(incident.getRoundExecution().getId())
-                .orElseThrow(() -> new IllegalArgumentException("Error: La ejecución de ronda especificada no existe."));
+        Installation inst = installationRepository.findById(installationId).orElseThrow(() -> new ResourceNotFoundException("Instalación no encontrada."));
 
-        // 3. Asignar la ronda completa (con su instalación y datos hidratados) al incidente
-        incident.setRoundExecution(fullRound);
+        Shift shift = new Shift();
+        shift.setWorker(worker);
+        shift.setInstallation(inst);
+        shift.setEntryTime(LocalDateTime.now());
+        shift.setStatus(ShiftStatus.EN_CURSO);
 
-        // 4. Establecer la fecha de creación
-        incident.setCreatedAt(java.time.LocalDateTime.now());
-
-        // 5. Guardar
-        return incidentRepository.save(incident);
+        return Map.of("mensaje", "Jornada iniciada", "jornada", shiftRepository.save(shift));
     }
 
-    public List<Incident> obtenerIncidentesPorRonda(Long roundExecutionId) {
-        return incidentRepository.findByRoundExecutionId(roundExecutionId);
+    public Map<String, Object> finalizarJornada(Long id) {
+        Shift shift = shiftRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Jornada no encontrada."));
+        if (roundExecutionRepository.existsByWorkerIdAndStatus(shift.getWorker().getId(), RoundStatus.EN_PROGRESO))
+            throw new BadRequestException("Termina la ronda antes de cerrar jornada.");
+
+        shift.setExitTime(LocalDateTime.now());
+        shift.setStatus(ShiftStatus.FINALIZADO);
+        return Map.of("mensaje", "Jornada finalizada", "jornada", shiftRepository.save(shift));
     }
 
-    // --- Métodos de Gestión de Rondas ---
+    public Map<String, Object> cancelarJornada(Long id, Long adminId) {
+        Shift shift = shiftRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Jornada no encontrada con ID: " + id));
 
-    public RoundExecution iniciarRonda(RoundExecution round) {
-        // 1. Validar que la ronda venga con una instalación asociada
-        if (round.getInstallation() == null || round.getInstallation().getId() == null) {
-            throw new IllegalArgumentException("La ronda debe estar asociada a una instalación válida.");
-        }
+        userRepository.findById(adminId).orElseThrow(() -> new ResourceNotFoundException("Administrador no encontrado"));
 
-        // 2. Buscar la instalación completa en la base de datos usando el ID proporcionado
-        // Esto asegura que el objeto "installation" no sea null y tenga todos sus datos
-        Installation fullInstallation = installationRepository.findById(round.getInstallation().getId())
-                .orElseThrow(() -> new IllegalArgumentException("No existe una instalación con el ID: " + round.getInstallation().getId()));
+        shift.setStatus(ShiftStatus.CANCELADO);
+        shift.setExitTime(LocalDateTime.now());
 
-        // 3. Asignamos la instalación completa, el estado y la hora de inicio
-        round.setInstallation(fullInstallation);
-        round.setStatus(RoundStatus.INICIADA);
-        round.setStartTime(java.time.LocalDateTime.now());
-
-        return roundExecutionRepository.save(round);
+        return Map.of("mensaje", "Jornada cancelada por administrador", "jornada", shiftRepository.save(shift));
     }
 
-    public Checklog registrarEscaneo(Checklog log) {
-        // 1. Validaciones
-        if (log.getRoundExecution() == null || log.getRoundExecution().getId() == null) {
-            throw new IllegalArgumentException("El escaneo debe estar asociado a una ejecución de ronda.");
-        }
-        if (log.getCheckpoint() == null || log.getCheckpoint().getId() == null) {
-            throw new IllegalArgumentException("El escaneo debe estar asociado a un checkpoint.");
+    // --- RONDAS ---
+    public Map<String, Object> iniciarRonda(Long userId, Long installationId) {
+        shiftRepository.findByWorkerIdAndInstallationIdAndStatus(userId, installationId, ShiftStatus.EN_CURSO)
+                .orElseThrow(() -> new BadRequestException("No tienes jornada activa aquí."));
+
+        if (roundExecutionRepository.existsByWorkerIdAndStatus(userId, RoundStatus.EN_PROGRESO))
+            throw new BadRequestException("Ya hay una ronda en progreso.");
+
+        RoundExecution round = new RoundExecution();
+        round.setWorker(userRepository.getReferenceById(userId));
+        round.setInstallation(installationRepository.getReferenceById(installationId));
+        round.setStartTime(LocalDateTime.now());
+        round.setStatus(RoundStatus.EN_PROGRESO);
+
+        return Map.of("mensaje", "Ronda iniciada", "ronda", roundExecutionRepository.save(round));
+    }
+
+    public Map<String, Object> finalizarRonda(Long id) {
+        RoundExecution round = roundExecutionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada con ID: " + id));
+
+        if (round.getStatus() != RoundStatus.EN_PROGRESO) {
+            throw new BadRequestException("La ronda ya no está en progreso.");
         }
 
-        // 2. Buscar la ronda completa
+        round.setEndTime(LocalDateTime.now());
+        round.setStatus(RoundStatus.FINALIZADA);
+
+        return Map.of("mensaje", "Ronda finalizada", "ronda", roundExecutionRepository.save(round));
+    }
+
+    public Map<String, Object> cancelarRonda(Long id, Long adminId, String motivo) {
+        RoundExecution round = roundExecutionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada con ID: " + id));
+
+        userRepository.findById(adminId).orElseThrow(() -> new ResourceNotFoundException("Administrador no encontrado"));
+
+        round.setStatus(RoundStatus.CANCELADA);
+        round.setEndTime(LocalDateTime.now());
+
+        return Map.of(
+                "mensaje", "Ronda cancelada por administrador",
+                "motivo", motivo,
+                "ronda", roundExecutionRepository.save(round)
+        );
+    }
+
+    // --- REGISTRO DE ESCANEO (Corregido con validación de existencia) ---
+    public Map<String, Object> registrarEscaneo(Checklog log) {
+        // 1. Validar Ronda
         RoundExecution round = roundExecutionRepository.findById(log.getRoundExecution().getId())
-                .orElseThrow(() -> new IllegalArgumentException("No existe la ronda"));
+                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada."));
 
-        // 3. Buscar el checkpoint completo
-        Checkpoint checkpoint = checkpointRepository.findById(log.getCheckpoint().getId())
-                .orElseThrow(() -> new IllegalArgumentException("No existe el checkpoint"));
+        if (round.getStatus() != RoundStatus.EN_PROGRESO) throw new BadRequestException("Ronda no activa.");
 
-        // 4. Asignar los objetos completos al log
-        log.setRoundExecution(round);
-        log.setCheckpoint(checkpoint);
-        log.setTimestamp(java.time.LocalDateTime.now());
-
-        return checklogRepository.save(log);
-    }
-
-    // --- Métodos de Gestión de Instalaciones ---
-
-    public Installation guardarInstalacion(Installation installation) {
-        return installationRepository.save(installation);
-    }
-
-    public List<Installation> obtenerTodasLasInstalaciones() {
-        return installationRepository.findAll();
-    }
-
-    // --- Métodos de Gestión de Checkpoints ---
-
-    public Checkpoint guardarCheckpoint(Checkpoint checkpoint) {
-        // 1. Validamos que el checkpoint tenga una instalación asociada
-        if (checkpoint.getInstallation() == null || checkpoint.getInstallation().getId() == null) {
-            throw new IllegalArgumentException("El checkpoint debe tener una instalación asociada válida.");
+        // 2. Validar Existencia del Checkpoint (Para evitar error de Constraint en DB)
+        if (log.getCheckpoint() == null || log.getCheckpoint().getId() == null) {
+            throw new BadRequestException("El punto de control es obligatorio.");
         }
 
-        // 2. Buscamos la instalación completa en la base de datos usando el ID proporcionado
-        Installation fullInstallation = installationRepository.findById(checkpoint.getInstallation().getId())
-                .orElseThrow(() -> new IllegalArgumentException("No existe una instalación con el ID: " + checkpoint.getInstallation().getId()));
+        if (!checkpointRepository.existsById(log.getCheckpoint().getId())) {
+            throw new ResourceNotFoundException("El punto de control con ID " + log.getCheckpoint().getId() + " no existe.");
+        }
 
-        // 3. Asignamos el objeto de instalación completo (con nombre, dirección, etc.) al checkpoint
-        checkpoint.setInstallation(fullInstallation);
+        // 3. Validar duplicados
+        if (checklogRepository.existsByRoundExecutionIdAndCheckpointId(round.getId(), log.getCheckpoint().getId()))
+            throw new BadRequestException("Punto ya escaneado.");
 
-        // 4. Guardamos el checkpoint ahora que tiene la instalación completa
-        return checkpointRepository.save(checkpoint);
+        log.setTimestamp(LocalDateTime.now());
+        return Map.of("mensaje", "Escaneo registrado", "escaneo", checklogRepository.save(log));
     }
 
-    public List<CheckpointDTO> obtenerCheckpointsPorInstalacion(Long installationId) {
-        return checkpointRepository.findByInstallationId(installationId)
-                .stream()
-                .map(c -> new CheckpointDTO(c.getId(), c.getName(), c.getLocationDescription(), c.getNfcTagCode(), c.getInstallation().getId()))
+    // --- CONSULTAS (Sin cambios, manteniendo tu lógica original) ---
+    public Map<String, Object> obtenerEstadisticasGlobales(LocalDateTime inicio, LocalDateTime fin) {
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("totalRondas", roundExecutionRepository.count());
+        stats.put("totalIncidentes", incidentRepository.count());
+        stats.put("jornadasActivas", shiftRepository.findAll().stream().filter(s -> s.getStatus() == ShiftStatus.EN_CURSO).count());
+        return stats;
+    }
+
+    public Map<String, Object> obtenerDetalleRonda(Long id) {
+        RoundExecution round = roundExecutionRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada"));
+        return Map.of("ronda", round, "escaneos", checklogRepository.findByRoundExecutionId(id), "incidentes", incidentRepository.findByRoundExecutionId(id));
+    }
+
+    public List<RoundExecution> filtrarRondas(String fecha, Long installationId, Long userId) {
+        List<RoundExecution> todas = roundExecutionRepository.findAll();
+
+        return todas.stream()
+                .filter(r -> {
+                    boolean coincideFecha = (fecha == null) || r.getStartTime().toLocalDate().toString().equals(fecha);
+                    boolean coincideInst = (installationId == null) || (r.getInstallation().getId().equals(installationId));
+                    boolean coincideUser = (userId == null) || (r.getWorker().getId().equals(userId));
+
+                    return coincideFecha && coincideInst && coincideUser;
+                })
                 .collect(Collectors.toList());
     }
 
-    public RoundExecution finalizarRonda(Long id) {
-        RoundExecution round = roundExecutionRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("No se encontró la ronda con ID: " + id));
-
-        round.setEndTime(java.time.LocalDateTime.now());
-
-        // Usamos el Enum directamente
-        round.setStatus(RoundStatus.TERMINADA);
-
-        return roundExecutionRepository.save(round);
+    public Object obtenerRondasSegunRol(Long requesterId) {
+        User user = userRepository.findById(requesterId).orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        return (user.getRole() == UserRole.GUARD) ? roundExecutionRepository.findByWorkerId(requesterId) : roundExecutionRepository.findAll();
     }
-
-    public RoundExecution obtenerRondaPorId(Long id) {
-        return roundExecutionRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("No se encontró la ronda con ID: " + id));
-    }
-
-    public List<RoundExecution> obtenerTodasLasRondas() {
-        return roundExecutionRepository.findAll();
-    }
-
-
 }

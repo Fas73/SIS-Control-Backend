@@ -1,5 +1,6 @@
 package com.siscontrol.backend.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.siscontrol.backend.enums.UserRole;
 import com.siscontrol.backend.enums.UserStatus;
 import jakarta.persistence.*;
@@ -26,6 +27,7 @@ public class User {
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
+    @JsonIgnore // Evita que la contraseña se envíe en las respuestas JSON (Postman/Frontend)
     @Column(nullable = false, length = 255)
     private String password;
 

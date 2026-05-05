@@ -1,6 +1,8 @@
 package com.siscontrol.backend.services;
 
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -27,7 +29,11 @@ public class SupervisorGuardService {
     @Autowired
     private UserService userService;
 
-    public SupervisorGuardResponseDTO asignarGuardia(Long supervisorId, Long guardId) {
+    /**
+     * ASIGNAR GUARDIA A SUPERVISOR
+     * Devuelve un mensaje de éxito y la data de la relación.
+     */
+    public Object asignarGuardia(Long supervisorId, Long guardId) {
         User supervisor = userRepository.findById(supervisorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supervisor no encontrado"));
 
@@ -55,25 +61,53 @@ public class SupervisorGuardService {
 
         SupervisorGuard savedRelation = supervisorGuardRepository.save(relacion);
 
-        return new SupervisorGuardResponseDTO(
+        // Estructura de respuesta con mensaje de éxito
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("mensaje", "Guardia " + guard.getFullName() + " asignado exitosamente al supervisor " + supervisor.getFullName());
+        response.put("data", new SupervisorGuardResponseDTO(
                 userService.convertirAResponseDTO(savedRelation.getSupervisor()),
                 userService.convertirAResponseDTO(savedRelation.getGuard())
-        );
+        ));
+
+        return response;
     }
 
-    public List<SupervisorGuardResponseDTO> obtenerGuardiasDeSupervisor(Long supervisorId) {
+    /**
+     * OBTENER GUARDIAS (Con mensaje si la lista está vacía)
+     */
+    public Object obtenerGuardiasDeSupervisor(Long supervisorId) {
         User supervisor = userRepository.findById(supervisorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supervisor no encontrado"));
-        
-        return supervisorGuardRepository.findBySupervisor(supervisor)
+
+        List<SupervisorGuardResponseDTO> guardias = supervisorGuardRepository.findBySupervisor(supervisor)
                 .stream()
                 .map(relacion -> new SupervisorGuardResponseDTO(
                         userService.convertirAResponseDTO(relacion.getSupervisor()),
                         userService.convertirAResponseDTO(relacion.getGuard())
                 ))
                 .toList();
+
+        if (guardias.isEmpty()) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("mensaje", "El supervisor " + supervisor.getFullName() + " aún no tiene guardias asignados.");
+            response.put("guardias", guardias);
+            response.put("total", 0);
+            return response;
+        }
+
+        return guardias;
     }
 
-    
+    /**
+     * ELIMINAR ASIGNACIÓN
+     */
+    public void eliminarAsignacion(Long supervisorId, Long guardId) {
+        SupervisorGuardId relationId = new SupervisorGuardId(supervisorId, guardId);
 
+        if (!supervisorGuardRepository.existsById(relationId)) {
+            throw new ResourceNotFoundException("No existe una relación entre el supervisor ID " + supervisorId + " y el guardia ID " + guardId);
+        }
+
+        supervisorGuardRepository.deleteById(relationId);
+    }
 }
