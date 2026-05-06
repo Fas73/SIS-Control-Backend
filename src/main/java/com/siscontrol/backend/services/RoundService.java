@@ -30,16 +30,16 @@ public class RoundService {
 
     // --- JORNADAS ---
     public Map<String, Object> iniciarJornada(Long userId, Long installationId) {
-        User worker = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-        if (worker.getRole() != UserRole.GUARD) throw new BadRequestException("Solo guardias inician jornada.");
+        User guard = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        if (guard.getRole() != UserRole.GUARD) throw new BadRequestException("Solo guardias inician jornada.");
 
-        if (shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO).isPresent())
+        if (shiftRepository.findByGuardIdAndStatus(userId, ShiftStatus.EN_CURSO).isPresent())
             throw new BadRequestException("Ya tienes una jornada en curso.");
 
         Installation inst = installationRepository.findById(installationId).orElseThrow(() -> new ResourceNotFoundException("Instalación no encontrada."));
 
         Shift shift = new Shift();
-        shift.setWorker(worker);
+        shift.setGuard(guard);
         shift.setInstallation(inst);
         shift.setEntryTime(LocalDateTime.now());
         shift.setStatus(ShiftStatus.EN_CURSO);
@@ -49,7 +49,7 @@ public class RoundService {
 
     public Map<String, Object> finalizarJornada(Long id) {
         Shift shift = shiftRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Jornada no encontrada."));
-        if (roundExecutionRepository.existsByWorkerIdAndStatus(shift.getWorker().getId(), RoundStatus.EN_PROGRESO))
+        if (roundExecutionRepository.existsByGuardIdAndStatus(shift.getGuard().getId(), RoundStatus.EN_PROGRESO))
             throw new BadRequestException("Termina la ronda antes de cerrar jornada.");
 
         shift.setExitTime(LocalDateTime.now());
@@ -71,14 +71,14 @@ public class RoundService {
 
     // --- RONDAS ---
     public Map<String, Object> iniciarRonda(Long userId, Long installationId) {
-        shiftRepository.findByWorkerIdAndInstallationIdAndStatus(userId, installationId, ShiftStatus.EN_CURSO)
+        shiftRepository.findByGuardIdAndInstallationIdAndStatus(userId, installationId, ShiftStatus.EN_CURSO)
                 .orElseThrow(() -> new BadRequestException("No tienes jornada activa aquí."));
 
-        if (roundExecutionRepository.existsByWorkerIdAndStatus(userId, RoundStatus.EN_PROGRESO))
+        if (roundExecutionRepository.existsByGuardIdAndStatus(userId, RoundStatus.EN_PROGRESO))
             throw new BadRequestException("Ya hay una ronda en progreso.");
 
         RoundExecution round = new RoundExecution();
-        round.setWorker(userRepository.getReferenceById(userId));
+        round.setGuard(userRepository.getReferenceById(userId));
         round.setInstallation(installationRepository.getReferenceById(installationId));
         round.setStartTime(LocalDateTime.now());
         round.setStatus(RoundStatus.EN_PROGRESO);
@@ -162,7 +162,7 @@ public class RoundService {
                 .filter(r -> {
                     boolean coincideFecha = (fecha == null) || r.getStartTime().toLocalDate().toString().equals(fecha);
                     boolean coincideInst = (installationId == null) || (r.getInstallation().getId().equals(installationId));
-                    boolean coincideUser = (userId == null) || (r.getWorker().getId().equals(userId));
+                    boolean coincideUser = (userId == null) || (r.getGuard().getId().equals(userId));
 
                     return coincideFecha && coincideInst && coincideUser;
                 })
@@ -171,6 +171,6 @@ public class RoundService {
 
     public Object obtenerRondasSegunRol(Long requesterId) {
         User user = userRepository.findById(requesterId).orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-        return (user.getRole() == UserRole.GUARD) ? roundExecutionRepository.findByWorkerId(requesterId) : roundExecutionRepository.findAll();
+        return (user.getRole() == UserRole.GUARD) ? roundExecutionRepository.findByGuardId(requesterId) : roundExecutionRepository.findAll();
     }
 }

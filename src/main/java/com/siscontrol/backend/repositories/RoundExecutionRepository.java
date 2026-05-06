@@ -8,6 +8,6 @@ import java.util.List;
 
 @Repository
 public interface RoundExecutionRepository extends JpaRepository<RoundExecution, Long> {
-    boolean existsByWorkerIdAndStatus(Long workerId, RoundStatus status);
-    List<RoundExecution> findByWorkerId(Long workerId);
+    boolean existsByGuardIdAndStatus(Long guardId, RoundStatus status);
+    List<RoundExecution> findByGuardId(Long guardId);
 }

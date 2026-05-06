@@ -21,8 +21,8 @@ public class Shift {
     private Installation installation;
 
     @ManyToOne
-    @JoinColumn(name = "user_id")
-    private User worker;
+    @JoinColumn(name = "guard_id")
+    private User guard;
 
     private LocalDateTime entryTime;
     private LocalDateTime exitTime;

@@ -21,7 +21,7 @@ public class ReportService {
 
         List<Shift> jornadas = (requester.getRole() == UserRole.ADMIN || requester.getRole() == UserRole.SUPERVISOR)
                 ? shiftRepository.findAll()
-                : shiftRepository.findByWorkerId(requesterId);
+                : shiftRepository.findByGuardId(requesterId);
 
         return validarRespuesta(jornadas, "No se encontraron registros de jornadas.");
     }
@@ -32,7 +32,7 @@ public class ReportService {
 
         List<RoundExecution> rondas = (requester.getRole() == UserRole.ADMIN || requester.getRole() == UserRole.SUPERVISOR)
                 ? roundExecutionRepository.findAll()
-                : roundExecutionRepository.findByWorkerId(requesterId);
+                : roundExecutionRepository.findByGuardId(requesterId);
 
         return validarRespuesta(rondas, "No se encontraron registros de rondas.");
     }

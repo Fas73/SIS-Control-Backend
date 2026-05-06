@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Table(name = "round_executions")
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({ "id", "worker", "installation", "status", "startTime", "endTime", "cancellationReason" })
+@JsonPropertyOrder({ "id", "guard", "installation", "status", "startTime", "endTime", "cancellationReason" })
 public class RoundExecution {
 
     @Id
@@ -19,8 +19,8 @@ public class RoundExecution {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "worker_id")
-    private User worker;
+    @JoinColumn(name = "guard_id")
+    private User guard;
 
     @ManyToOne
     @JoinColumn(name = "installation_id")
