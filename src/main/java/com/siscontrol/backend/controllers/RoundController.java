@@ -1,6 +1,7 @@
 package com.siscontrol.backend.controllers;
 
 import com.siscontrol.backend.dto.CheckpointDTO;
+import com.siscontrol.backend.dto.StartRoundRequestDTO;
 import com.siscontrol.backend.models.*;
 import com.siscontrol.backend.services.RoundService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,8 +34,8 @@ public class RoundController {
     // --- Endpoints Rondas y Operaciones ---
 
     @PostMapping("/iniciar")
-    public ResponseEntity<RoundExecution> iniciarRonda(@RequestBody RoundExecution round) {
-        return new ResponseEntity<>(roundService.iniciarRonda(round), HttpStatus.CREATED);
+    public ResponseEntity<RoundExecution> iniciarRonda(@RequestBody StartRoundRequestDTO request) {
+        return new ResponseEntity<>(roundService.iniciarRonda(request), HttpStatus.CREATED);
     }
 
     @GetMapping("/all")

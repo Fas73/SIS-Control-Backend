@@ -1,10 +1,16 @@
 package com.siscontrol.backend.services;
 
 import com.siscontrol.backend.dto.CheckpointDTO;
+import com.siscontrol.backend.dto.StartRoundRequestDTO;
+import com.siscontrol.backend.enums.UserRole;
+import com.siscontrol.backend.exception.BadRequestException;
+import com.siscontrol.backend.exception.ResourceNotFoundException;
 import com.siscontrol.backend.models.*;
 import com.siscontrol.backend.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -16,6 +22,8 @@ public class RoundService {
     @Autowired private ChecklogRepository checklogRepository;
     @Autowired private RoundExecutionRepository roundExecutionRepository;
     @Autowired private IncidentRepository incidentRepository;
+    @Autowired private RoundRepository roundRepository;
+    @Autowired private UserRepository userRepository;
 
     // --- Métodos de Gestión de Incidentes ---
 
@@ -45,23 +53,27 @@ public class RoundService {
 
     // --- Métodos de Gestión de Rondas ---
 
-    public RoundExecution iniciarRonda(RoundExecution round) {
-        // 1. Validar que la ronda venga con una instalación asociada
-        if (round.getInstallation() == null || round.getInstallation().getId() == null) {
-            throw new IllegalArgumentException("La ronda debe estar asociada a una instalación válida.");
+    public RoundExecution iniciarRonda(StartRoundRequestDTO request) {
+
+        Round round = roundRepository.findById(request.getRoundId())
+                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada"));
+        
+        User guard = userRepository.findById(request.getGuardId())
+                .orElseThrow(() -> new ResourceNotFoundException("Guardia no encontrado"));
+        
+        if (guard.getRole() != UserRole.GUARD) {
+            throw new BadRequestException("El usuario especificado no tiene el rol de guardia.");
         }
 
-        // 2. Buscar la instalación completa en la base de datos usando el ID proporcionado
-        // Esto asegura que el objeto "installation" no sea null y tenga todos sus datos
-        Installation fullInstallation = installationRepository.findById(round.getInstallation().getId())
-                .orElseThrow(() -> new IllegalArgumentException("No existe una instalación con el ID: " + round.getInstallation().getId()));
+        RoundExecution execution = new RoundExecution();
+        execution.setRound(round);
+        execution.setGuard(guard);
+        execution.setStartTime(LocalDateTime.now());
+        execution.setStatus(RoundStatus.INICIADA);
+        
+        return roundExecutionRepository.save(execution);
 
-        // 3. Asignamos la instalación completa, el estado y la hora de inicio
-        round.setInstallation(fullInstallation);
-        round.setStatus(RoundStatus.INICIADA);
-        round.setStartTime(java.time.LocalDateTime.now());
-
-        return roundExecutionRepository.save(round);
+        
     }
 
     public Checklog registrarEscaneo(Checklog log) {
