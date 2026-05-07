@@ -6,7 +6,7 @@ import com.siscontrol.backend.models.RoundExecution;
 import com.siscontrol.backend.repositories.InstallationRepository;
 import com.siscontrol.backend.repositories.ChecklogRepository;
 import com.siscontrol.backend.repositories.RoundExecutionRepository;
-
+import com.siscontrol.backend.dto.NfcScanRequestDTO;
 import com.siscontrol.backend.enums.*;
 import com.siscontrol.backend.models.*;
 import com.siscontrol.backend.repositories.*;
@@ -139,6 +139,30 @@ public class RoundService {
 
         log.setTimestamp(LocalDateTime.now());
         return Map.of("mensaje", "Escaneo registrado", "escaneo", checklogRepository.save(log));
+    }
+
+    //metodo registro en nfc, similar al anterior pero con validacion de ronda y punto de control, ademas de validar que el tag nfc exista y corresponda a un punto de control registrado en la instalacion de la ronda
+    public Checklog registrarEscaneoNfc(NfcScanRequestDTO request) {
+        RoundExecution execution = roundExecutionRepository.findById(request.getExecutionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada."));
+
+        if (execution.getStatus() != RoundStatus.EN_PROGRESO) {
+            throw new BadRequestException("Ronda no está en progreso.");
+        }
+
+        Checkpoint checkpoint = checkpointRepository.findByNfcTagCode(request.getNfcTagCode())
+                .orElseThrow(() -> new ResourceNotFoundException("Checkpoint NFC no encontrado."));
+
+        if (checklogRepository.existsByRoundExecutionIdAndCheckpointId(execution.getId(), checkpoint.getId())) {
+            throw new BadRequestException("Punto de control ya escaneado en esta ronda.");
+        }
+        
+        Checklog log = new Checklog();
+        log.setRoundExecution(execution);
+        log.setCheckpoint(checkpoint);
+        log.setTimestamp(LocalDateTime.now());
+
+        return checklogRepository.save(log);
     }
 
     // --- CONSULTAS (Sin cambios, manteniendo tu lógica original) ---
