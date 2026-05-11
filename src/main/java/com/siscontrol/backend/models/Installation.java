@@ -1,5 +1,5 @@
 package com.siscontrol.backend.models;
-
+import com.siscontrol.backend.enums.UserStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,7 +11,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Installation {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -19,7 +18,10 @@ public class Installation {
     @Column(nullable = false)
     private String name;
 
-    private String address;
+    private String address;    // Usado en Postman
+    private String clientName; // Usado en Postman
+    private String location;   // Usado en Service
 
-    private String clientName;
+    @Enumerated(EnumType.STRING)
+    private UserStatus status = UserStatus.ACTIVE;
 }

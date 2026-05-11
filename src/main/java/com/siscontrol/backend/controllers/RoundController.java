@@ -1,95 +1,99 @@
 package com.siscontrol.backend.controllers;
 
-import com.siscontrol.backend.dto.CheckpointDTO;
-import com.siscontrol.backend.models.*;
+import com.siscontrol.backend.dto.IncidentDTO;
+import com.siscontrol.backend.models.Checklog;
+import com.siscontrol.backend.services.IncidentService;
 import com.siscontrol.backend.services.RoundService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 import java.util.Map;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/rondas")
+@CrossOrigin(origins = "*")
 public class RoundController {
 
     @Autowired
     private RoundService roundService;
 
-    // --- Endpoints Incidentes ---
+    @Autowired
+    private IncidentService incidentService;
 
-    @PostMapping("/incidente")
-    public ResponseEntity<Incident> reportarIncidente(@RequestBody Incident incident) {
-        return new ResponseEntity<>(roundService.registrarIncidente(incident), HttpStatus.CREATED);
+    // --- MÉTODOS DE JORNADA Y RONDA ---
+
+    @PostMapping("/jornada/iniciar")
+    public ResponseEntity<Map<String, Object>> iniciarJornada(@RequestParam Long userId, @RequestParam Long installationId) {
+        return new ResponseEntity<>(roundService.iniciarJornada(userId, installationId), HttpStatus.CREATED);
     }
-
-    @GetMapping("/incidente/{roundExecutionId}")
-    public ResponseEntity<List<Incident>> listarIncidentes(@PathVariable Long roundExecutionId) {
-        return ResponseEntity.ok(roundService.obtenerIncidentesPorRonda(roundExecutionId));
-    }
-
-    // --- Endpoints Rondas y Operaciones ---
 
     @PostMapping("/iniciar")
-    public ResponseEntity<RoundExecution> iniciarRonda(@RequestBody RoundExecution round) {
-        return new ResponseEntity<>(roundService.iniciarRonda(round), HttpStatus.CREATED);
+    public ResponseEntity<Map<String, Object>> iniciarRonda(@RequestParam Long userId, @RequestParam Long installationId) {
+        return new ResponseEntity<>(roundService.iniciarRonda(userId, installationId), HttpStatus.CREATED);
     }
 
-    @GetMapping("/all")
-    public ResponseEntity<List<RoundExecution>> listarRondas() {
-        return ResponseEntity.ok(roundService.obtenerTodasLasRondas());
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<RoundExecution> obtenerRonda(@PathVariable Long id) {
-        return ResponseEntity.ok(roundService.obtenerRondaPorId(id));
+    @PutMapping("/jornada/finalizar/{id}")
+    public ResponseEntity<Map<String, Object>> finalizarJornada(@PathVariable Long id) {
+        return ResponseEntity.ok(roundService.finalizarJornada(id));
     }
 
     @PutMapping("/finalizar/{id}")
-    public ResponseEntity<RoundExecution> finalizarRonda(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> finalizarRonda(@PathVariable Long id) {
         return ResponseEntity.ok(roundService.finalizarRonda(id));
     }
 
-    // --- Endpoints Instalaciones ---
+    // --- MÉTODOS DE CANCELACIÓN ---
 
-    @PostMapping("/instalaciones")
-    public ResponseEntity<Installation> crearInstalacion(@RequestBody Installation installation) {
-        return new ResponseEntity<>(roundService.guardarInstalacion(installation), HttpStatus.CREATED);
+    @PutMapping("/jornada/cancelar/{id}")
+    public ResponseEntity<Map<String, Object>> cancelarJornada(@PathVariable Long id, @RequestParam Long adminId) {
+        return ResponseEntity.ok(roundService.cancelarJornada(id, adminId));
     }
 
-    @GetMapping("/instalaciones")
-    public ResponseEntity<List<Installation>> listarInstalaciones() {
-        return ResponseEntity.ok(roundService.obtenerTodasLasInstalaciones());
+    @PutMapping("/cancelar/{id}")
+    public ResponseEntity<Map<String, Object>> cancelarRonda(@PathVariable Long id, @RequestParam Long adminId, @RequestParam String motivo) {
+        return ResponseEntity.ok(roundService.cancelarRonda(id, adminId, motivo));
     }
 
-    // --- Endpoints Checkpoints ---
+    // --- CONSULTAS (Incluye nueva funcionalidad de filtro por Guardia) ---
 
-    @PostMapping("/checkpoints")
-    public ResponseEntity<Checkpoint> crearCheckpoint(@RequestBody Checkpoint checkpoint) {
-        return new ResponseEntity<>(roundService.guardarCheckpoint(checkpoint), HttpStatus.CREATED);
-    }
+    // URL: GET http://localhost:8080/api/rondas/buscar?userId=1
+    @GetMapping("/buscar")
+    public ResponseEntity<?> buscarRondas(
+            @RequestParam(required = false) String fecha,
+            @RequestParam(required = false) Long installationId,
+            @RequestParam(required = false) Long userId) {
 
-    @GetMapping("/checkpoints/{installationId}")
-    public ResponseEntity<List<CheckpointDTO>> listarCheckpoints(@PathVariable Long installationId) {
-        List<CheckpointDTO> checkpoints = roundService.obtenerCheckpointsPorInstalacion(installationId);
-        if (checkpoints.isEmpty()) {
-            return ResponseEntity.noContent().build();
+        // Obtenemos el resultado como Object para evitar errores de tipos en el build
+        Object resultado = roundService.filtrarRondas(fecha, installationId, userId);
+
+        // Si es una lista y está vacía, devolvemos el mensaje personalizado para Postman
+        if (resultado instanceof List) {
+            List<?> lista = (List<?>) resultado;
+            if (lista.isEmpty()) {
+                return ResponseEntity.ok(Map.of("mensaje", "No se encontraron rondas para los criterios seleccionados."));
+            }
         }
-        return ResponseEntity.ok(checkpoints);
+
+        return ResponseEntity.ok(resultado);
     }
+
+    // URL: GET http://localhost:8080/api/rondas/1
+    @GetMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> obtenerDetalle(@PathVariable Long id) {
+        return ResponseEntity.ok(roundService.obtenerDetalleRonda(id));
+    }
+
+    // --- REGISTROS (ESCANEOS E INCIDENCIAS) ---
 
     @PostMapping("/escaneo")
-    public ResponseEntity<Checklog> realizarEscaneo(@RequestBody Checklog log) {
+    public ResponseEntity<Map<String, Object>> realizarEscaneo(@RequestBody Checklog log) {
         return new ResponseEntity<>(roundService.registrarEscaneo(log), HttpStatus.CREATED);
     }
 
-    // --- Manejador de Errores Global ---
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", ex.getMessage()));
+    @PostMapping("/incidente")
+    public ResponseEntity<?> reportarIncidenteEnRonda(@RequestBody IncidentDTO dto) {
+        return ResponseEntity.ok(incidentService.reportarIncidente(dto));
     }
 }

@@ -1,4 +1,4 @@
-package com.siscontrol.backend.models;
+package com.siscontrol.backend.enums;
 
 public enum IncidentType {
     ROBO,
