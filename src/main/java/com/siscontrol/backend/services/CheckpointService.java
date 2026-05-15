@@ -101,7 +101,7 @@ public class CheckpointService {
                 .map(c -> new CheckpointDTO(
                         c.getId(), c.getName(), c.getLocationDescription(),
                         c.getNfcTagCode(), c.getInstallation().getId(),
-                        c.getExecutionOrder(), c.getInstruction()))
+                        c.getExecutionOrder(), c.getInstruction(), c.getStatus()))
                 .collect(Collectors.toList());
     }
 
