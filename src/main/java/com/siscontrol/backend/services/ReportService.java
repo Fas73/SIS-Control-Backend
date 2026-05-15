@@ -19,7 +19,7 @@ public class ReportService {
     @Autowired private ShiftRepository shiftRepository;
     @Autowired private UserRepository userRepository;
 
-    // 1. Método de estadísticas que consultaste
+    // 1. Metodo de estadísticas que consultaste
     public Map<String, Object> obtenerEstadisticasGlobales(LocalDateTime inicio, LocalDateTime fin) {
         List<RoundExecution> todas = roundExecutionRepository.findAll();
 
