@@ -19,7 +19,6 @@ public class RoundService {
     @Autowired private IncidentRepository incidentRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private InstallationRepository installationRepository;
-    @Autowired private CheckpointRepository checkpointRepository;
 
     // --- JORNADAS (ASISTENCIA) ---
 

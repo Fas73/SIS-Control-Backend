@@ -96,19 +96,12 @@ public class CheckpointService {
         if (!installationRepository.existsById(installationId)) {
             throw new ResourceNotFoundException("La instalación no existe.");
         }
-
-        // Se removió el .filter(c -> c.getStatus() == 1) para retornar todos los checkpoints
         return checkpointRepository.findByInstallationIdOrderByExecutionOrderAsc(installationId).stream()
+                .filter(c -> c.getStatus() == 1)
                 .map(c -> new CheckpointDTO(
-                        c.getId(),
-                        c.getName(),
-                        c.getLocationDescription(),
-                        c.getNfcTagCode(),
-                        c.getInstallation().getId(),
-                        c.getExecutionOrder(),
-                        c.getInstruction(),
-                        c.getStatus()
-                ))
+                        c.getId(), c.getName(), c.getLocationDescription(),
+                        c.getNfcTagCode(), c.getInstallation().getId(),
+                        c.getExecutionOrder(), c.getInstruction()))
                 .collect(Collectors.toList());
     }
 

@@ -1,11 +1,8 @@
 package com.siscontrol.backend.controllers;
 
-import com.siscontrol.backend.dto.IncidentDTO;
-import com.siscontrol.backend.dto.CheckInRequestDTO; // Asegúrate de tener este DTO creado
 import com.siscontrol.backend.models.Checklog;
 import com.siscontrol.backend.services.IncidentService;
 import com.siscontrol.backend.services.RoundService;
-import com.siscontrol.backend.services.InstallationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,8 +16,6 @@ import java.util.List;
 public class RoundController {
 
     @Autowired private RoundService roundService;
-    @Autowired private IncidentService incidentService;
-
 
     // --- CONTROL DE RONDAS ---
 
