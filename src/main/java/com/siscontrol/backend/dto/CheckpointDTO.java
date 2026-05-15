@@ -13,4 +13,7 @@ public class CheckpointDTO {
     private String locationDescription;
     private String nfcTagCode;
     private Long installationId;
+    private Integer executionOrder;
+    private String instruction;
+    private Integer status; // <-- AGREGAR ESTE CAMPO
 }
