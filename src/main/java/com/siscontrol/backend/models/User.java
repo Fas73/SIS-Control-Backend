@@ -2,54 +2,39 @@ package com.siscontrol.backend.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.siscontrol.backend.enums.UserRole;
-import com.siscontrol.backend.enums.UserStatus;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
+import lombok.*;
 
 @Entity
 @Table(name = "users")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
-
+@EqualsAndHashCode(callSuper = true)
+public class User extends Auditable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 50)
+    @Column(nullable = false, unique = true, length = 12)
+    private String rut; // Formato: 12345678-K
+
+    @Column(nullable = false, unique = true)
     private String username;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(nullable = false, unique = true)
     private String email;
 
-    @JsonIgnore // Evita que la contraseña se envíe en las respuestas JSON (Postman/Frontend)
-    @Column(nullable = false, length = 255)
+    @JsonIgnore
     private String password;
 
-    @Column(name = "full_name", nullable = false, length = 100)
     private String fullName;
 
+    @Column(length = 12)
+    private String phoneNumber; // Formato: +56912345678
+
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private UserRole role;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private UserStatus status = UserStatus.ACTIVE;
-
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        if (status == null) {
-            status = UserStatus.ACTIVE;
-        }
-    }
+    private Integer status = 1; // 1: Activo, 0: Inactivo
 }
