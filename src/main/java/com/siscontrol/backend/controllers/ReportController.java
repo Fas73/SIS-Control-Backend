@@ -1,6 +1,5 @@
 package com.siscontrol.backend.controllers;
 
-import com.siscontrol.backend.services.RoundService;
 import com.siscontrol.backend.services.ReportService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -13,14 +12,14 @@ import java.time.LocalDateTime;
 @CrossOrigin(origins = "*")
 public class ReportController {
 
-    @Autowired private RoundService roundService;
     @Autowired private ReportService reportService;
 
     @GetMapping("/stats")
     public ResponseEntity<?> obtenerEstadisticas(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fin) {
-        return ResponseEntity.ok(roundService.obtenerEstadisticasGlobales(inicio, fin));
+        // CORRECCIÓN: Se llama a reportService, no a roundService
+        return ResponseEntity.ok(reportService.obtenerEstadisticasGlobales(inicio, fin));
     }
 
     @GetMapping("/rondas/all")

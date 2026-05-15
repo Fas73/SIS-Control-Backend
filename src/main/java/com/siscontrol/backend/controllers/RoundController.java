@@ -1,9 +1,11 @@
 package com.siscontrol.backend.controllers;
 
 import com.siscontrol.backend.dto.IncidentDTO;
+import com.siscontrol.backend.dto.CheckInRequestDTO; // Asegúrate de tener este DTO creado
 import com.siscontrol.backend.models.Checklog;
 import com.siscontrol.backend.services.IncidentService;
 import com.siscontrol.backend.services.RoundService;
+import com.siscontrol.backend.services.InstallationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,84 +18,46 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class RoundController {
 
-    @Autowired
-    private RoundService roundService;
+    @Autowired private RoundService roundService;
+    @Autowired private IncidentService incidentService;
 
-    @Autowired
-    private IncidentService incidentService;
 
-    // --- MÉTODOS DE JORNADA Y RONDA ---
-
-    @PostMapping("/jornada/iniciar")
-    public ResponseEntity<Map<String, Object>> iniciarJornada(@RequestParam Long userId, @RequestParam Long installationId) {
-        return new ResponseEntity<>(roundService.iniciarJornada(userId, installationId), HttpStatus.CREATED);
-    }
+    // --- CONTROL DE RONDAS ---
 
     @PostMapping("/iniciar")
-    public ResponseEntity<Map<String, Object>> iniciarRonda(@RequestParam Long userId, @RequestParam Long installationId) {
+    public ResponseEntity<?> iniciarRonda(@RequestParam Long userId, @RequestParam Long installationId) {
         return new ResponseEntity<>(roundService.iniciarRonda(userId, installationId), HttpStatus.CREATED);
     }
 
-    @PutMapping("/jornada/finalizar/{id}")
-    public ResponseEntity<Map<String, Object>> finalizarJornada(@PathVariable Long id) {
-        return ResponseEntity.ok(roundService.finalizarJornada(id));
-    }
-
     @PutMapping("/finalizar/{id}")
-    public ResponseEntity<Map<String, Object>> finalizarRonda(@PathVariable Long id) {
-        return ResponseEntity.ok(roundService.finalizarRonda(id));
+    public ResponseEntity<?> finalizarRonda(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
+        String obs = (body != null) ? body.getOrDefault("observations", "Completada") : "Completada";
+        return ResponseEntity.ok(roundService.finalizarRonda(id, obs));
     }
 
-    // --- MÉTODOS DE CANCELACIÓN ---
+    // --- ESCANEOS E INCIDENTES ---
 
-    @PutMapping("/jornada/cancelar/{id}")
-    public ResponseEntity<Map<String, Object>> cancelarJornada(@PathVariable Long id, @RequestParam Long adminId) {
-        return ResponseEntity.ok(roundService.cancelarJornada(id, adminId));
+    @PostMapping("/escaneo")
+    public ResponseEntity<?> realizarEscaneo(@RequestBody Checklog log) {
+        return new ResponseEntity<>(roundService.registrarEscaneo(log), HttpStatus.CREATED);
     }
 
-    @PutMapping("/cancelar/{id}")
-    public ResponseEntity<Map<String, Object>> cancelarRonda(@PathVariable Long id, @RequestParam Long adminId, @RequestParam String motivo) {
-        return ResponseEntity.ok(roundService.cancelarRonda(id, adminId, motivo));
-    }
+    // --- CONSULTAS ---
 
-    // --- CONSULTAS (Incluye nueva funcionalidad de filtro por Guardia) ---
-
-    // URL: GET http://localhost:8080/api/rondas/buscar?userId=1
     @GetMapping("/buscar")
     public ResponseEntity<?> buscarRondas(
             @RequestParam(required = false) String fecha,
             @RequestParam(required = false) Long installationId,
             @RequestParam(required = false) Long userId) {
-
-        // Obtenemos el resultado como Object para evitar errores de tipos en el build
-        Object resultado = roundService.filtrarRondas(fecha, installationId, userId);
-
-        // Si es una lista y está vacía, devolvemos el mensaje personalizado para Postman
-        if (resultado instanceof List) {
-            List<?> lista = (List<?>) resultado;
-            if (lista.isEmpty()) {
-                return ResponseEntity.ok(Map.of("mensaje", "No se encontraron rondas para los criterios seleccionados."));
-            }
+        List<?> lista = roundService.filtrarRondas(fecha, installationId, userId);
+        if (lista.isEmpty()) {
+            return ResponseEntity.ok(Map.of("mensaje", "No se encontraron rondas."));
         }
-
-        return ResponseEntity.ok(resultado);
+        return ResponseEntity.ok(lista);
     }
 
-    // URL: GET http://localhost:8080/api/rondas/1
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> obtenerDetalle(@PathVariable Long id) {
+    public ResponseEntity<?> obtenerDetalle(@PathVariable Long id) {
         return ResponseEntity.ok(roundService.obtenerDetalleRonda(id));
-    }
-
-    // --- REGISTROS (ESCANEOS E INCIDENCIAS) ---
-
-    @PostMapping("/escaneo")
-    public ResponseEntity<Map<String, Object>> realizarEscaneo(@RequestBody Checklog log) {
-        return new ResponseEntity<>(roundService.registrarEscaneo(log), HttpStatus.CREATED);
-    }
-
-    @PostMapping("/incidente")
-    public ResponseEntity<?> reportarIncidenteEnRonda(@RequestBody IncidentDTO dto) {
-        return ResponseEntity.ok(incidentService.reportarIncidente(dto));
     }
 }
