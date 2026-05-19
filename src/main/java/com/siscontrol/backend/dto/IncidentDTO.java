@@ -20,4 +20,5 @@ public class IncidentDTO {
     // Campos para las relaciones
     private Long roundExecutionId;
     private Long checklogId; // Puede ser null
+    private Integer status;
 }

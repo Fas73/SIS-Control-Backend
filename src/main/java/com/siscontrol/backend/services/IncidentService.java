@@ -88,7 +88,8 @@ public class IncidentService {
                 i.getType() != null ? i.getType().name() : null,
                 i.getCreatedAt(),
                 i.getRoundExecution() != null ? i.getRoundExecution().getId() : null,
-                (i.getChecklog() != null ? i.getChecklog().getId() : null)
+                (i.getChecklog() != null ? i.getChecklog().getId() : null),
+                i.getStatus()
         );
     }
 }

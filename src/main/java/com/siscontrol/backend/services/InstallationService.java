@@ -36,6 +36,11 @@ public class InstallationService {
         return Map.of("mensaje", "Instalación creada con éxito", "instalacion", guardada);
     }
 
+    public long contarInstalacionesActivas() {
+        return installationRepository.findAll().stream()
+                .filter(i -> i.getStatus() == 1)
+                .count();
+    }
     /**
      * Obtiene todas las instalaciones o un mensaje si la lista está vacía.
      */

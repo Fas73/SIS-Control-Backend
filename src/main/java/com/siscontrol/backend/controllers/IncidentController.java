@@ -27,9 +27,8 @@ public class IncidentController {
     @GetMapping
     public ResponseEntity<?> listarTodo() {
         List<IncidentDTO> incidentes = incidentService.obtenerTodos();
-        if (incidentes.isEmpty()) {
-            return ResponseEntity.ok(Map.of("mensaje", "No hay incidentes registrados en el sistema."));
-        }
+        // Eliminamos el IF que enviaba un mensaje de texto.
+        // Si está vacía, devolverá un [] que la App procesará perfectamente.
         return ResponseEntity.ok(incidentes);
     }
 

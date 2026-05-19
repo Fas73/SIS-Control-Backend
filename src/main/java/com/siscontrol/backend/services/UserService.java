@@ -20,7 +20,9 @@ public class UserService {
     private UserRepository userRepository;
 
     public Optional<User> login(String username, String password) {
-        Optional<User> userOpt = userRepository.findByUsername(username);
+        // Buscamos dinámicamente si calza con el username o con el email
+        Optional<User> userOpt = userRepository.findByUsernameOrEmail(username, username);
+
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             if (user.getPassword().equals(password)) {
@@ -39,6 +41,11 @@ public class UserService {
 
         validarPermisos(creator, request.getRole());
         validarCampos(request);
+
+        // La contraseña es obligatoria únicamente al momento de la creación
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            throw new BadRequestException("Password obligatoria para la creación de un usuario");
+        }
 
         if (userRepository.findByRut(request.getRut().toUpperCase()).isPresent()) {
             throw new BadRequestException("El RUT ya está registrado.");
@@ -83,7 +90,9 @@ public class UserService {
         targetUser.setRole(request.getRole());
         targetUser.setPhoneNumber(request.getPhoneNumber());
 
-        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+        // --- PROTECCIÓN TÉCNICA RECOMENDADA ---
+        // Evita que la contraseña real se destruya o sobrescriba si viene vacía o con el valor ficticio por defecto
+        if (request.getPassword() != null && !request.getPassword().trim().isEmpty() && !request.getPassword().equals("password123")) {
             targetUser.setPassword(request.getPassword());
         }
 
@@ -166,7 +175,6 @@ public class UserService {
         }
         if (request.getUsername() == null || request.getUsername().isBlank()) throw new BadRequestException("Username obligatorio");
         if (request.getEmail() == null || request.getEmail().isBlank()) throw new BadRequestException("Email obligatorio");
-        if (request.getPassword() == null || request.getPassword().isBlank()) throw new BadRequestException("Password obligatoria");
         if (request.getRole() == null) throw new BadRequestException("Rol obligatorio");
     }
 
@@ -197,5 +205,57 @@ public class UserService {
                 user.getStatus(),
                 user.getCreatedAt() != null ? user.getCreatedAt().toString() : null
         );
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public UserResponseDTO actualizarMisDatos(Long userId, com.siscontrol.backend.dto.UpdateProfileRequestDTO request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        // Validar formato de teléfono si viene presente
+        if (request.getPhoneNumber() == null || !request.getPhoneNumber().matches("^\\+56\\d{9}$")) {
+            throw new BadRequestException("El teléfono debe tener el formato +56 seguido de 9 dígitos (Ej: +56912345678)");
+        }
+
+        // Validar que el nuevo username no esté tomado por otro usuario
+        if (request.getUsername() != null && !request.getUsername().isBlank()) {
+            userRepository.findByUsername(request.getUsername())
+                    .ifPresent(u -> {
+                        if(!u.getId().equals(userId)) throw new BadRequestException("El nombre de usuario ya está en uso.");
+                    });
+            user.setUsername(request.getUsername());
+        }
+
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            user.setFullName(request.getFullName());
+        }
+
+        user.setPhoneNumber(request.getPhoneNumber());
+        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedBy(userId); // Se editó a sí mismo
+
+        return convertirAResponseDTO(userRepository.save(user));
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void actualizarMiContrasena(Long userId, com.siscontrol.backend.dto.UpdatePasswordRequestDTO request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        // 1. Validar que la contraseña actual ingresada en el teléfono sea la correcta
+        if (!user.getPassword().equals(request.getCurrentPassword())) {
+            throw new BadRequestException("La contraseña actual es incorrecta.");
+        }
+
+        if (request.getNewPassword() == null || request.getNewPassword().isBlank()) {
+            throw new BadRequestException("La nueva contraseña no puede estar vacía.");
+        }
+
+        // 2. Guardar la nueva contraseña
+        user.setPassword(request.getNewPassword());
+        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedBy(userId);
+
+        userRepository.save(user);
     }
 }

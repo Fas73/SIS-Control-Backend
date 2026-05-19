@@ -16,4 +16,7 @@ public interface CheckpointRepository extends JpaRepository<Checkpoint, Long> {
     boolean existsByInstallationIdAndExecutionOrderAndStatus(Long installationId, Integer executionOrder, Integer status);
 
     boolean existsByInstallationIdAndExecutionOrderAndStatusAndIdNot(Long installationId, Integer executionOrder, Integer status, Long id);
+
+    // Consulta indispensable para el cálculo dinámico del total de puntos (Número B)
+    long countByInstallationIdAndStatus(Long installationId, Integer status);
 }

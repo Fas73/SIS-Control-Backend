@@ -1,7 +1,6 @@
 package com.siscontrol.backend.controllers;
 
 import com.siscontrol.backend.models.Checklog;
-
 import com.siscontrol.backend.services.RoundService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -30,6 +29,21 @@ public class RoundController {
         return ResponseEntity.ok(roundService.finalizarRonda(id, obs));
     }
 
+    @PutMapping("/cancelar/{id}")
+    public ResponseEntity<?> cancelarRonda(
+            @PathVariable Long id,
+            @RequestParam Long adminId,
+            @RequestParam(required = false) String motivo) {
+        return ResponseEntity.ok(roundService.cancelarRondaAdministrativamente(id, adminId, motivo));
+    }
+
+    @PutMapping("/jornada/cancelar/{id}")
+    public ResponseEntity<?> cancelarJornada(
+            @PathVariable Long id,
+            @RequestParam Long adminId) {
+        return ResponseEntity.ok(roundService.cancelarJornadaAdministrativamente(id, adminId));
+    }
+
     // --- ESCANEOS E INCIDENTES ---
 
     @PostMapping("/escaneo")
@@ -45,9 +59,7 @@ public class RoundController {
             @RequestParam(required = false) Long installationId,
             @RequestParam(required = false) Long userId) {
         List<?> lista = roundService.filtrarRondas(fecha, installationId, userId);
-        if (lista.isEmpty()) {
-            return ResponseEntity.ok(Map.of("mensaje", "No se encontraron rondas."));
-        }
+        // Eliminamos el IF que enviaba un mensaje de error tipo objeto
         return ResponseEntity.ok(lista);
     }
 

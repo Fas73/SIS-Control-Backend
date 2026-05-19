@@ -31,6 +31,12 @@ public class InstallationController {
         return ResponseEntity.ok(installationService.obtenerTodas());
     }
 
+    @GetMapping("/total-activas")
+    public ResponseEntity<?> obtenerTotalInstalacionesActivas() {
+        long total = installationService.contarInstalacionesActivas();
+        return ResponseEntity.ok(Map.of("totalInstalacionesActivas", total));
+    }
+
     @PostMapping
     public ResponseEntity<Map<String, Object>> crearInstalacion(
             @RequestParam Long editorId,

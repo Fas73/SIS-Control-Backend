@@ -41,6 +41,9 @@ public class Incident {
     @JoinColumn(name = "checklog_id", nullable = true)
     private Checklog checklog;
 
+    @Column(nullable = false, columnDefinition = "int default 0")
+    private Integer status = 0; // 0 = Reportado/Pendiente, 1 = Atendido/Resuelto
+
     @PrePersist
     protected void onCreate() { if (createdAt == null) createdAt = LocalDateTime.now(); }
 }
