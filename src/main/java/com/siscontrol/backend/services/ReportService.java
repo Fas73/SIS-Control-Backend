@@ -29,7 +29,6 @@ public class ReportService {
     @Autowired private IncidentRepository incidentRepository;
     @Autowired private InstallationRepository installationRepository;
 
-    // 1. Método de estadísticas globales (Dashboard General)
     public Map<String, Object> obtenerEstadisticasGlobales(LocalDateTime inicio, LocalDateTime fin) {
         List<RoundExecution> todas = roundExecutionRepository.findAll();
 
@@ -50,19 +49,17 @@ public class ReportService {
         );
     }
 
-    // 2. Historial de Jornadas (Asistencia)
     public Object obtenerHistorialJornadas(Long requesterId) {
         User requester = userRepository.findById(requesterId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         List<Shift> jornadas = (requester.getRole() == UserRole.ADMIN || requester.getRole() == UserRole.SUPERVISOR)
                 ? shiftRepository.findAll()
-                : shiftRepository.findAll(); // Mantiene consistencia de búsqueda general
+                : shiftRepository.findAll();
 
         return validarRespuesta(jornadas, "No se encontraron registros de jornadas.");
     }
 
-    // 3. Historial de Rondas General (Admin/Supervisor)
     public Object obtenerHistorialRondas(Long requesterId) {
         User requester = userRepository.findById(requesterId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
@@ -74,7 +71,6 @@ public class ReportService {
         return validarRespuesta(rondas, "No se encontraron registros de rondas.");
     }
 
-    // 4. Obtener estadísticas de guardias activos
     public Map<String, Object> obtenerEstadisticasGuardias() {
         LocalDateTime hoyInicio = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
         LocalDateTime hoyFin = LocalDateTime.now().withHour(23).withMinute(59).withSecond(59);
@@ -92,119 +88,104 @@ public class ReportService {
 
         return Map.of(
                 "totalGuardias", totalGuardias,
-                "guardiasConJornada Iniciada", guardiasActivos
+                "guardiasConJornadaIniciada", guardiasActivos
         );
     }
 
-    // 5. Historial con JSON completamente procesado ("Masticado") para el Frontend Móvil
     public Map<String, Object> obtenerHistorialRondasGuardia(Long guardId, LocalDateTime inicio, LocalDateTime fin) {
         if (!userRepository.existsById(guardId)) {
             throw new ResourceNotFoundException("Guardia no encontrado.");
         }
 
-        // Simulación lógica o mapeo según arquitectura existente
-        List<RoundExecution> todasMisRondas = roundExecutionRepository.findAll();
-        List<Shift> todasMisJornadas = shiftRepository.findAll();
-
-        List<RoundExecution> rondasFiltradas = todasMisRondas.stream()
+        List<RoundExecution> todasMisRondas = roundExecutionRepository.findAll().stream()
                 .filter(r -> r.getWorker() != null && r.getWorker().getId().equals(guardId))
                 .filter(r -> r.getStartTime() != null)
-                .filter(r -> (inicio == null || !r.getStartTime().isBefore(inicio)) &&
-                        (fin == null || !r.getStartTime().isAfter(fin)))
-                .sorted((r1, r2) -> r2.getStartTime().compareTo(r1.getStartTime()))
+                .filter(r -> {
+                    // Tolerancia de Husos Horarios para la App Móvil en Chile
+                    if (inicio != null && r.getStartTime().isBefore(inicio.minusHours(4))) return false;
+                    if (fin != null && r.getStartTime().isAfter(fin.plusHours(4))) return false;
+                    return true;
+                })
                 .collect(Collectors.toList());
 
-        long total = rondasFiltradas.size();
-        long completas = rondasFiltradas.stream().filter(r -> r.getStatus() == RoundStatus.FINALIZADA).count();
-        int porcentajeExito = total > 0 ? (int) Math.round(((double) completas / total) * 100) : 0;
+        Map<Long, List<RoundExecution>> agrupadas = todasMisRondas.stream()
+                .collect(Collectors.groupingBy(RoundExecution::getId));
 
         List<RoundHistoryItemDTO> dtoList = new ArrayList<>();
+        List<Shift> todasMisJornadas = shiftRepository.findAll();
 
-        for (RoundExecution r : rondasFiltradas) {
-            String startStr = r.getStartTime().toString();
-            String endStr = r.getEndTime() != null ? r.getEndTime().toString() : null;
-
-            long minutosDuracion = 0;
-            if (r.getEndTime() != null) {
-                minutosDuracion = Duration.between(r.getStartTime(), r.getEndTime()).toMinutes();
-            }
+        for (Map.Entry<Long, List<RoundExecution>> entrada : agrupadas.entrySet()) {
+            RoundExecution r = entrada.getValue().get(0);
 
             int totalPoints = 0;
-            int scannedPoints = 0;
-
             if (r.getInstallation() != null) {
                 totalPoints = (int) checkpointRepository.countByInstallationIdAndStatus(r.getInstallation().getId(), 1);
             }
-            scannedPoints = (int) checklogRepository.countByRoundExecutionId(r.getId());
 
-            int incidentesCount = 0;
-            try {
-                if (r.getStatus() != RoundStatus.FINALIZADA && scannedPoints < totalPoints) {
-                    incidentesCount = 1;
-                }
-            } catch (Exception e) {
-                incidentesCount = 0;
-            }
+            int scannedPoints = (int) checklogRepository.countByRoundExecutionId(r.getId());
 
-            String statusDisplay = "En curso";
-            if (r.getStatus() == RoundStatus.FINALIZADA || (totalPoints > 0 && scannedPoints >= totalPoints)) {
+            long incidentesRealesCount = incidentRepository.findByRoundExecutionId(r.getId()).stream()
+                    .filter(i -> i.getSeverity() != null && !i.getSeverity().equalsIgnoreCase("Baja"))
+                    .count();
+
+            String statusDisplay = "Incompleta";
+            if (r.getStatus() == RoundStatus.EN_PROGRESO) {
+                statusDisplay = "En curso";
+            } else if (r.getStatus() == RoundStatus.FINALIZADA || (totalPoints > 0 && scannedPoints >= totalPoints)) {
                 statusDisplay = "Completada";
-            } else if (scannedPoints < totalPoints) {
-                statusDisplay = "Incompleta";
             }
 
-            String textoIncidente = (incidentesCount == 1) ? "1 incidente reportado" : incidentesCount + " incidentes";
-            if (incidentesCount == 0) textoIncidente = "0 incidentes";
-            String detailedSummary = scannedPoints + "/" + totalPoints + " puntos marcados, " + textoIncidente;
+            String textoIncidente = (incidentesRealesCount == 1) ? "1 incidente reportado" : incidentesRealesCount + " incidentes";
+            if (incidentesRealesCount == 0) textoIncidente = "Sin incidentes";
+            String detailedSummary = scannedPoints + "/" + totalPoints + " puntos marcados. " + textoIncidente;
 
             String shiftStart = null;
             String shiftEnd = null;
             java.time.LocalDate fechaRonda = r.getStartTime().toLocalDate();
 
+            // Buscamos la última jornada del día para evitar quedar amarrados al primer turno de la madrugada
             Optional<Shift> shiftDelDia = todasMisJornadas.stream()
                     .filter(s -> s.getWorker() != null && s.getWorker().getId().equals(guardId))
                     .filter(s -> s.getEntryTime() != null && s.getEntryTime().toLocalDate().equals(fechaRonda))
-                    .findFirst();
+                    .max(Comparator.comparing(Shift::getEntryTime));
 
             if (shiftDelDia.isPresent()) {
                 shiftStart = shiftDelDia.get().getEntryTime().toString();
                 shiftEnd = shiftDelDia.get().getExitTime() != null ? shiftDelDia.get().getExitTime().toString() : "En curso";
             }
 
-            String nombreInstalacion = (r.getInstallation() != null) ? r.getInstallation().getName() : "Instalación Desconocida";
-
             dtoList.add(new RoundHistoryItemDTO(
                     r.getId(),
-                    nombreInstalacion,
-                    startStr,
-                    endStr,
-                    minutosDuracion,
+                    (r.getInstallation() != null) ? r.getInstallation().getName() : "Instalación Desconocida",
+                    r.getStartTime().toString(),
+                    r.getEndTime() != null ? r.getEndTime().toString() : null,
+                    r.getEndTime() != null ? java.time.Duration.between(r.getStartTime(), r.getEndTime()).toMinutes() : 0,
                     r.getStatus().name(),
                     statusDisplay,
                     scannedPoints,
                     totalPoints,
-                    incidentesCount,
+                    (int) incidentesRealesCount,
                     shiftStart,
                     shiftEnd,
                     detailedSummary
             ));
         }
 
+        dtoList.sort((d1, d2) -> Long.compare(d2.getId(), d1.getId()));
+
         Map<String, Object> respuesta = new LinkedHashMap<>();
-        respuesta.put("total", total);
-        respuesta.put("completas", completas);
-        respuesta.put("porcentajeExito", porcentajeExito + "%");
+        respuesta.put("total", dtoList.size());
+        respuesta.put("completas", dtoList.stream().filter(d -> d.getStatusDisplay().equalsIgnoreCase("Completada")).count());
+        respuesta.put("porcentajeExito", dtoList.isEmpty() ? "0%" : (int)((dtoList.stream().filter(d -> d.getStatusDisplay().equalsIgnoreCase("Completada")).count() * 100) / dtoList.size()) + "%");
         respuesta.put("rondas", dtoList);
 
         return respuesta;
     }
 
-    // --- NUEVO ENDPOINT UNIFICADO PARA EL DASHBOARD DEL ADMINISTRADOR ---
     public AdminDashboardDTO obtenerDashboardAdmin() {
         LocalDateTime inicioHoy = LocalDateTime.of(java.time.LocalDate.now(), java.time.LocalTime.MIN);
         LocalDateTime finHoy = LocalDateTime.of(java.time.LocalDate.now(), java.time.LocalTime.MAX);
 
-        // 1. Cálculos de Guardias (Filtro por rol directamente en memoria de forma segura)
         List<User> todosLosUsuarios = userRepository.findAll();
         int totalGuards = (int) todosLosUsuarios.stream()
                 .filter(u -> u.getRole() == UserRole.GUARD && u.getStatus() == 1)
@@ -215,7 +196,6 @@ public class ReportService {
                 .filter(s -> s.getStatus() == ShiftStatus.EN_CURSO)
                 .count();
 
-        // 2. Métricas de Rondas de HOY
         List<RoundExecution> todasLasRondas = roundExecutionRepository.findAll();
         List<RoundExecution> rondasDeHoy = todasLasRondas.stream()
                 .filter(r -> r.getStartTime() != null && !r.getStartTime().isBefore(inicioHoy) && !r.getStartTime().isAfter(finHoy))
@@ -225,7 +205,6 @@ public class ReportService {
         int roundsInProgress = (int) rondasDeHoy.stream().filter(r -> r.getStatus() == RoundStatus.EN_PROGRESO).count();
         int roundsCompleted = (int) rondasDeHoy.stream().filter(r -> r.getStatus() == RoundStatus.FINALIZADA).count();
 
-        // 3. Métricas de Incidentes e Instalaciones
         List<Incident> todosLosIncidentes = incidentRepository.findAll();
         int totalIncidents = todosLosIncidentes.size();
         int pendingIncidents = (int) todosLosIncidentes.stream().filter(i -> i.getStatus() == 0).count();
@@ -234,7 +213,6 @@ public class ReportService {
         int totalInstallations = todasLasInstalaciones.size();
         int activeInstallationsCount = (int) todasLasInstalaciones.stream().filter(i -> i.getStatus() == 1).count();
 
-        // 4. Mapeo en Tiempo Real: Rondas Activas (Cruzando datos eficientemente en el servidor)
         List<DashboardActiveRoundDTO> activeRoundsList = todasLasRondas.stream()
                 .filter(r -> r.getStatus() == RoundStatus.EN_PROGRESO)
                 .map(r -> {
@@ -252,7 +230,6 @@ public class ReportService {
                     );
                 }).toList();
 
-        // 5. Mapeo en Tiempo Real: Jornadas Activas (CORREGIDO el error de sintaxis en la definición de tipo de lista)
         List<DashboardActiveShiftDTO> activeShiftsList = todasLasJornadas.stream()
                 .filter(s -> s.getStatus() == ShiftStatus.EN_CURSO)
                 .map(s -> {
@@ -268,7 +245,6 @@ public class ReportService {
                     );
                 }).toList();
 
-        // Construcción final de la respuesta única
         return new AdminDashboardDTO(
                 totalGuards, activeShiftsCount, totalRoundsToday, roundsInProgress, roundsCompleted,
                 totalIncidents, pendingIncidents, totalInstallations, activeInstallationsCount,
@@ -276,10 +252,9 @@ public class ReportService {
         );
     }
 
-    // REEMPLAZADO PARA DEVOLVER SIEMPRE UNA LISTA [] Y EVITAR EL "Expected BEGIN_ARRAY"
     private List<?> validarRespuesta(List<?> lista, String mensaje) {
         if (lista == null || lista.isEmpty()) {
-            return new java.util.ArrayList<>(); // Devuelve [] siempre, así la App no se rompe
+            return new java.util.ArrayList<>();
         }
         return lista;
     }

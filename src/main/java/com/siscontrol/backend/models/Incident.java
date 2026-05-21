@@ -5,10 +5,6 @@ import lombok.Data;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.siscontrol.backend.enums.IncidentType;
-import com.siscontrol.backend.models.Checklog;
-import com.siscontrol.backend.models.RoundExecution;
-import jakarta.persistence.*;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -20,21 +16,22 @@ public class Incident {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String title;       // Requerido por Postman
+    private String title;
     private String description;
-    private String severity;    // Requerido por Postman (Ej: "Alta")
+    private String severity;
 
     @Column(columnDefinition = "TEXT")
-    private String imageUrl;    // Requerido por Postman para fotos de evidencia
+    private String imageUrl;
 
     private LocalDateTime createdAt;
 
     @Enumerated(EnumType.STRING)
     private IncidentType type;
 
+    // --- CORRECCIÓN CRÍTICA: CAMBIADO A NULLABLE = TRUE ---
     @ManyToOne
-    @JoinColumn(name = "round_execution_id", nullable = false)
-    @JsonIgnoreProperties({"worker", "installation"}) // Evita bucle infinito
+    @JoinColumn(name = "round_execution_id", nullable = true)
+    @JsonIgnoreProperties({"worker", "installation"})
     private RoundExecution roundExecution;
 
     @ManyToOne
@@ -42,7 +39,7 @@ public class Incident {
     private Checklog checklog;
 
     @Column(nullable = false, columnDefinition = "int default 0")
-    private Integer status = 0; // 0 = Reportado/Pendiente, 1 = Atendido/Resuelto
+    private Integer status = 0;
 
     @PrePersist
     protected void onCreate() { if (createdAt == null) createdAt = LocalDateTime.now(); }
