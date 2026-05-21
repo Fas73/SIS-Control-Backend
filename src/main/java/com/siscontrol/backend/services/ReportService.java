@@ -29,7 +29,7 @@ public class ReportService {
     @Autowired private IncidentRepository incidentRepository;
     @Autowired private InstallationRepository installationRepository;
 
-    // 1. Método de estadísticas globales (Dashboard General)
+    // 1. Metodo de estadísticas globales (Dashboard General)
     public Map<String, Object> obtenerEstadisticasGlobales(LocalDateTime inicio, LocalDateTime fin) {
         List<RoundExecution> todas = roundExecutionRepository.findAll();
 

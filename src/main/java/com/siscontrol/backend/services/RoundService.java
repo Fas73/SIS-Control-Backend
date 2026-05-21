@@ -5,6 +5,7 @@ import com.siscontrol.backend.models.*;
 import com.siscontrol.backend.repositories.*;
 import com.siscontrol.backend.exception.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled; // <-- IMPORTANTE
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
@@ -20,6 +21,8 @@ public class RoundService {
     @Autowired private IncidentRepository incidentRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private InstallationRepository installationRepository;
+
+    @Autowired private AlertService alertService;
 
     // --- JORNADAS (ASISTENCIA) ---
 
@@ -90,7 +93,6 @@ public class RoundService {
             throw new ForbiddenException("El guardia se encuentra inactivo. No puede iniciar rondas.");
         }
 
-        // Validación extra de negocio: Asegurar que el guardia tenga asistencia iniciada
         boolean tieneJornadaActiva = shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO).isPresent();
         if (!tieneJornadaActiva) {
             throw new BadRequestException("Debe iniciar su jornada laboral (Asistencia) antes de comenzar una ronda.");
@@ -121,7 +123,20 @@ public class RoundService {
         round.setEndTime(LocalDateTime.now());
         round.setObservations(observations);
 
-        return Map.of("mensaje", "Ronda finalizada con éxito", "ronda", roundExecutionRepository.save(round));
+        RoundExecution guardada = roundExecutionRepository.save(round);
+
+        // DISPARAR ALERTA INFORMATIVA AUTOMÁTICA (Pestaña Info)
+        Incident infoRonda = new Incident();
+        infoRonda.setTitle("ℹ️ Ronda completada");
+        infoRonda.setDescription("Todos los checkpoints verificados por " + round.getWorker().getFullName() + " en " + round.getInstallation().getName());
+        infoRonda.setSeverity("Baja"); // Pestaña de información (Azul)
+        infoRonda.setStatus(1); // Auto-atendido / Cerrado
+        infoRonda.setType(com.siscontrol.backend.enums.IncidentType.HALLAZGO);
+        infoRonda.setRoundExecution(guardada);
+
+        alertService.registrarYDispararAlerta(infoRonda);
+
+        return Map.of("mensaje", "Ronda finalizada con éxito", "ronda", guardada);
     }
 
     @Transactional
@@ -140,7 +155,7 @@ public class RoundService {
         round.setObservations("[CANCELACIÓN ADMINISTRATIVA]: " + (motivo != null ? motivo : "Sin motivo especificado"));
 
         return Map.of(
-                "mensaje", "Ronda cancelada administrativamente con éxito",
+                "mensaje", "Ronda canceled administrativamente con éxito",
                 "ronda", roundExecutionRepository.save(round)
         );
     }
@@ -156,15 +171,41 @@ public class RoundService {
         RoundExecution round = roundExecutionRepository.findById(log.getRoundExecution().getId())
                 .orElseThrow(() -> new ResourceNotFoundException("La ronda vinculada al escaneo no existe."));
 
-        // Protección: Evitar escaneos en rondas ya cerradas
         if (round.getStatus() == RoundStatus.FINALIZADA) {
             throw new BadRequestException("No se pueden registrar puntos de control en una ronda que ya está finalizada.");
         }
 
         log.setScannedAt(LocalDateTime.now());
-        log.setStatus(1); // Marcaje activo/válido
 
-        return Map.of("mensaje", "Escaneo de punto de control registrado exitosamente", "escaneo", checklogRepository.save(log));
+        if (log.getStatus() == null) {
+            log.setStatus(1);
+        }
+
+        Checklog guardado = checklogRepository.save(log);
+
+        if (guardado.getStatus() == 2) {
+            Incident alertaOmision = new Incident();
+            alertaOmision.setTitle("⚠️ Checkpoint no escaneado");
+
+            String motivo = (guardado.getNotes() != null && !guardado.getNotes().trim().isEmpty())
+                    ? guardado.getNotes()
+                    : "Ronda incompleta detectada (Punto saltado sin observaciones)";
+
+            alertaOmision.setDescription(motivo);
+            alertaOmision.setSeverity("Media"); // Pestaña de Advertencia
+            alertaOmision.setStatus(0);
+            alertaOmision.setType(com.siscontrol.backend.enums.IncidentType.MANTENCION);
+            alertaOmision.setRoundExecution(round);
+            alertaOmision.setChecklog(guardado);
+
+            alertService.registrarYDispararAlerta(alertaOmision);
+        }
+
+        String mensajeExito = (guardado.getStatus() == 2)
+                ? "Punto de control omitido con justificación correctamente. Secuencia liberada."
+                : "Escaneo de punto de control registrado exitosamente.";
+
+        return Map.of("mensaje", mensajeExito, "escaneo", guardado);
     }
 
     public Map<String, Object> obtenerDetalleRonda(Long id) {
@@ -179,8 +220,6 @@ public class RoundService {
     }
 
     public List<RoundExecution> filtrarRondas(String fecha, Long installationId, Long userId) {
-        // Optimización menor: Si tu base de datos crece, filtrar en memoria con .stream().filter() puede ponerse lento.
-        // En el futuro considera migrar esto a un query dinámico en el repositorio usando Specification o @Query.
         return roundExecutionRepository.findAll().stream()
                 .filter(r -> {
                     boolean coincideFecha = (fecha == null) || r.getStartTime().toLocalDate().toString().equals(fecha);
@@ -189,6 +228,62 @@ public class RoundService {
                     return coincideFecha && coincideInst && coincideUser;
                 })
                 .collect(Collectors.toList());
+    }
+
+    // --- ESTADO EN TIEMPO REAL ---
+    public Map<String, Object> verificarEstadoActual(Long userId) {
+        Optional<Shift> jornadaOpt = shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO);
+
+        Optional<RoundExecution> rondaOpt = roundExecutionRepository.findAll().stream()
+                .filter(r -> r.getWorker() != null && r.getWorker().getId().equals(userId) && r.getStatus() == RoundStatus.EN_PROGRESO)
+                .findFirst();
+
+        Map<String, Object> estado = new HashMap<>();
+        estado.put("jornadaActiva", jornadaOpt.isPresent());
+        estado.put("rondaActiva", rondaOpt.isPresent());
+        estado.put("jornada", jornadaOpt.orElse(null));
+        estado.put("ronda", rondaOpt.orElse(null));
+
+        return estado;
+    }
+
+    // --- AUTOMATIZACIÓN: DETECCIÓN DE INACTIVIDAD (Pestaña Advertencia) ---
+    @Scheduled(fixedRate = 300000) // Se ejecuta automáticamente cada 5 minutos
+    @Transactional
+    public void verificarRondasInactivas() {
+        LocalDateTime limiteInactividad = LocalDateTime.now().minusMinutes(15);
+
+        List<RoundExecution> rondasActivas = roundExecutionRepository.findAll().stream()
+                .filter(r -> r.getStatus() == RoundStatus.EN_PROGRESO)
+                .toList();
+
+        for (RoundExecution ronda : rondasActivas) {
+            List<Checklog> escaneos = checklogRepository.findByRoundExecutionId(ronda.getId());
+
+            LocalDateTime ultimaActividad = ronda.getStartTime();
+            if (!escaneos.isEmpty()) {
+                escaneos.sort((c1, c2) -> c2.getScannedAt().compareTo(c1.getScannedAt()));
+                ultimaActividad = escaneos.get(0).getScannedAt();
+            }
+
+            if (ultimaActividad.isBefore(limiteInactividad)) {
+                List<Incident> incidentesExistentes = incidentRepository.findByRoundExecutionId(ronda.getId());
+                boolean yaAlertado = incidentesExistentes.stream()
+                        .anyMatch(i -> i.getTitle().equals("⏳ Alerta: Ronda Incompleta"));
+
+                if (!yaAlertado) {
+                    Incident advertencia = new Incident();
+                    advertencia.setTitle("⏳ Alerta: Ronda Incompleta");
+                    advertencia.setDescription("Se ha detectado inactividad prolongada en " + ronda.getInstallation().getName() + " (más de 15 minutos sin registrar lecturas NFC).");
+                    advertencia.setSeverity("Media"); // Pestaña de Advertencia (Amarillo)
+                    advertencia.setStatus(0);
+                    advertencia.setType(com.siscontrol.backend.enums.IncidentType.MANTENCION);
+                    advertencia.setRoundExecution(ronda);
+
+                    alertService.registrarYDispararAlerta(advertencia);
+                }
+            }
+        }
     }
 
     private void validarAdminOSupervisor(Long editorId) {

@@ -2,11 +2,17 @@ package com.siscontrol.backend.repositories;
 
 import com.siscontrol.backend.models.Incident;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
 public interface IncidentRepository extends JpaRepository<Incident, Long> {
-    // Método para buscar incidentes asociados a una ronda específica
-    List<Incident> findByRoundExecutionId(Long roundExecutionId);
+
+    // Metodo para buscar incidentes asociados a una ronda específica
+    List<Incident> findByRoundExecutionId(Long roundExecutionId); //
+
+    // NUEVA CONSULTA OPTIMIZADA: Une las relaciones en una sola transacción SQL
+    @Query("SELECT i FROM Incident i LEFT JOIN FETCH i.roundExecution re LEFT JOIN FETCH re.installation LEFT JOIN FETCH re.worker LEFT JOIN FETCH i.checklog c LEFT JOIN FETCH c.checkpoint")
+    List<Incident> findAllOptimized();
 }

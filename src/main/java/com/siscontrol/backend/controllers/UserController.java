@@ -39,6 +39,17 @@ public class UserController {
         return ResponseEntity.ok(userService.actualizarUsuario(editorId, id, request));
     }
 
+    // --- NUEVO ENDPOINT: ACTUALIZAR FOTO DE PERFIL DESDE ANDROID ---
+    // PATCH http://localhost:8080/api/usuarios/9/profile-image?url=https://...
+    @PatchMapping("/{id}/profile-image")
+    public ResponseEntity<UserResponseDTO> actualizarFotoPerfil(
+            @PathVariable Long id,
+            @RequestParam String url) {
+
+        UserResponseDTO actualizado = userService.actualizarFotoPerfil(id, url);
+        return ResponseEntity.ok(actualizado);
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<UserResponseDTO> cambiarEstado(
             @PathVariable Long id,

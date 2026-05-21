@@ -14,11 +14,15 @@ public class IncidentDTO {
     private String description;
     private String severity;
     private String imageUrl;
-    private String type; // Campo para el Enum
+    private String type;
     private LocalDateTime createdAt;
 
-    // Campos para las relaciones
     private Long roundExecutionId;
-    private Long checklogId; // Puede ser null
+    private Long checklogId;
     private Integer status;
+
+    // --- NUEVOS CAMPOS REQUERIDOS POR EL FRONTEND MÓVIL ---
+    private String username;
+    private String clientName;
+    private String checkpointName;
 }

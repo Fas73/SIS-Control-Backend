@@ -10,7 +10,7 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    // Método para buscar si el identificador coincide con la columna username O email
+    // Metodo para buscar si el identificador coincide con la columna username O email
     Optional<User> findByUsernameOrEmail(String username, String email);
     Optional<User> findByUsername(String username);
     Optional<User> findByRut(String rut); // Búsqueda por RUT

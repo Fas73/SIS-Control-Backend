@@ -36,5 +36,7 @@ public class User extends Auditable {
     @Enumerated(EnumType.STRING)
     private UserRole role;
 
+    private String profileImageUrl;
+
     private Integer status = 1; // 1: Activo, 0: Inactivo
 }

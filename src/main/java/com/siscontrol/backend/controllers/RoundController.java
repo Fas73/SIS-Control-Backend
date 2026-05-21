@@ -59,12 +59,17 @@ public class RoundController {
             @RequestParam(required = false) Long installationId,
             @RequestParam(required = false) Long userId) {
         List<?> lista = roundService.filtrarRondas(fecha, installationId, userId);
-        // Eliminamos el IF que enviaba un mensaje de error tipo objeto
         return ResponseEntity.ok(lista);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerDetalle(@PathVariable Long id) {
         return ResponseEntity.ok(roundService.obtenerDetalleRonda(id));
+    }
+
+    // --- RECUPERACIÓN DE ESTADO PARA LA APP MÓVIL ---
+    @GetMapping("/estado-actual/{userId}")
+    public ResponseEntity<?> obtenerEstadoActual(@PathVariable Long userId) {
+        return ResponseEntity.ok(roundService.verificarEstadoActual(userId));
     }
 }

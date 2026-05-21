@@ -10,6 +10,7 @@ import com.siscontrol.backend.models.User;
 import com.siscontrol.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -20,7 +21,6 @@ public class UserService {
     private UserRepository userRepository;
 
     public Optional<User> login(String username, String password) {
-        // Buscamos dinámicamente si calza con el username o con el email
         Optional<User> userOpt = userRepository.findByUsernameOrEmail(username, username);
 
         if (userOpt.isPresent()) {
@@ -42,7 +42,6 @@ public class UserService {
         validarPermisos(creator, request.getRole());
         validarCampos(request);
 
-        // La contraseña es obligatoria únicamente al momento de la creación
         if (request.getPassword() == null || request.getPassword().isBlank()) {
             throw new BadRequestException("Password obligatoria para la creación de un usuario");
         }
@@ -90,8 +89,6 @@ public class UserService {
         targetUser.setRole(request.getRole());
         targetUser.setPhoneNumber(request.getPhoneNumber());
 
-        // --- PROTECCIÓN TÉCNICA RECOMENDADA ---
-        // Evita que la contraseña real se destruya o sobrescriba si viene vacía o con el valor ficticio por defecto
         if (request.getPassword() != null && !request.getPassword().trim().isEmpty() && !request.getPassword().equals("password123")) {
             targetUser.setPassword(request.getPassword());
         }
@@ -100,6 +97,19 @@ public class UserService {
         targetUser.setUpdatedAt(LocalDateTime.now());
 
         return convertirAResponseDTO(userRepository.save(targetUser));
+    }
+
+    // --- NUEVO MÉTODO: ACTUALIZACIÓN EXCLUSIVA DE IMAGEN DESDE EL MOVIL ---
+    @Transactional
+    public UserResponseDTO actualizarFotoPerfil(Long userId, String url) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con ID: " + userId));
+
+        user.setProfileImageUrl(url);
+        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedBy(userId); // Se actualizó a sí mismo
+
+        return convertirAResponseDTO(userRepository.save(user));
     }
 
     public void eliminarUsuario(Long editorId, Long userId) {
@@ -193,6 +203,7 @@ public class UserService {
         return lista;
     }
 
+    // --- CORREGIDO: AHORA SÍ RETORNA LA URL DE LA IMAGEN EN EL DTO ---
     public UserResponseDTO convertirAResponseDTO(User user) {
         return new UserResponseDTO(
                 user.getId(),
@@ -201,23 +212,22 @@ public class UserService {
                 user.getEmail(),
                 user.getFullName(),
                 user.getPhoneNumber(),
-                user.getRole().name(),
+                user.getRole() != null ? user.getRole().name() : null,
                 user.getStatus(),
-                user.getCreatedAt() != null ? user.getCreatedAt().toString() : null
+                user.getCreatedAt() != null ? user.getCreatedAt().toString() : null,
+                user.getProfileImageUrl() // <-- ESTA ERA LA PIEZA QUE FALTABA MAPEAR
         );
     }
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public UserResponseDTO actualizarMisDatos(Long userId, com.siscontrol.backend.dto.UpdateProfileRequestDTO request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        // Validar formato de teléfono si viene presente
         if (request.getPhoneNumber() == null || !request.getPhoneNumber().matches("^\\+56\\d{9}$")) {
             throw new BadRequestException("El teléfono debe tener el formato +56 seguido de 9 dígitos (Ej: +56912345678)");
         }
 
-        // Validar que el nuevo username no esté tomado por otro usuario
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             userRepository.findByUsername(request.getUsername())
                     .ifPresent(u -> {
@@ -232,17 +242,16 @@ public class UserService {
 
         user.setPhoneNumber(request.getPhoneNumber());
         user.setUpdatedAt(LocalDateTime.now());
-        user.setUpdatedBy(userId); // Se editó a sí mismo
+        user.setUpdatedBy(userId);
 
         return convertirAResponseDTO(userRepository.save(user));
     }
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public void actualizarMiContrasena(Long userId, com.siscontrol.backend.dto.UpdatePasswordRequestDTO request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        // 1. Validar que la contraseña actual ingresada en el teléfono sea la correcta
         if (!user.getPassword().equals(request.getCurrentPassword())) {
             throw new BadRequestException("La contraseña actual es incorrecta.");
         }
@@ -251,7 +260,6 @@ public class UserService {
             throw new BadRequestException("La nueva contraseña no puede estar vacía.");
         }
 
-        // 2. Guardar la nueva contraseña
         user.setPassword(request.getNewPassword());
         user.setUpdatedAt(LocalDateTime.now());
         user.setUpdatedBy(userId);
