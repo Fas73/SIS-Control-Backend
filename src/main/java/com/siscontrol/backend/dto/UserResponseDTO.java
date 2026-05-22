@@ -9,10 +9,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class UserResponseDTO {
     private Long id;
+    private String rut;
     private String username;
     private String email;
     private String fullName;
+    private String phoneNumber;
     private String role;
-    private String status;
+    private Integer status;
     private String createdAt;
+    private String profileImageUrl;
 }

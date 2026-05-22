@@ -2,7 +2,6 @@ package com.siscontrol.backend.controllers;
 
 import com.siscontrol.backend.models.Installation;
 import com.siscontrol.backend.models.Checkpoint;
-import com.siscontrol.backend.dto.CheckpointDTO;
 import com.siscontrol.backend.services.InstallationService;
 import com.siscontrol.backend.services.CheckpointService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,45 +16,92 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class InstallationController {
 
-    @Autowired private InstallationService installationService;
-    @Autowired private CheckpointService checkpointService;
+    @Autowired
+    private InstallationService installationService;
+
+    @Autowired
+    private CheckpointService checkpointService;
+
+    // ==========================================
+    // --- MÉTODOS DE INSTALACIONES ---
+    // ==========================================
 
     @GetMapping
     public ResponseEntity<?> listarInstalaciones() {
-        // Ahora devuelve 200 OK con la lista O con el mensaje de "No existen instalaciones"
         return ResponseEntity.ok(installationService.obtenerTodas());
     }
 
+    @GetMapping("/total-activas")
+    public ResponseEntity<?> obtenerTotalInstalacionesActivas() {
+        long total = installationService.contarInstalacionesActivas();
+        return ResponseEntity.ok(Map.of("totalInstalacionesActivas", total));
+    }
+
     @PostMapping
-    public ResponseEntity<Map<String, Object>> crearInstalacion(@RequestBody Installation installation) {
-        return new ResponseEntity<>(installationService.guardarInstalacion(installation), HttpStatus.CREATED);
+    public ResponseEntity<Map<String, Object>> crearInstalacion(
+            @RequestParam Long editorId,
+            @RequestBody Installation installation) {
+        return new ResponseEntity<>(installationService.guardarInstalacion(editorId, installation), HttpStatus.CREATED);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Installation> actualizar(
+    public ResponseEntity<Installation> actualizarInstalacion(
             @PathVariable Long id,
             @RequestParam Long editorId,
             @RequestBody Installation inst) {
         return ResponseEntity.ok(installationService.actualizar(editorId, id, inst));
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, String>> eliminar(
+    @PatchMapping("/{id}/toggle-status")
+    public ResponseEntity<?> alternarEstadoInstalacion(
             @PathVariable Long id,
             @RequestParam Long editorId) {
-        installationService.eliminarLogico(editorId, id);
-        return ResponseEntity.ok(Map.of("mensaje", "Instalación desactivada correctamente"));
+
+        Installation actualizada = installationService.alternarEstado(editorId, id);
+        String nuevoEstado = actualizada.getStatus() == 1 ? "Activo" : "Inactivo";
+
+        return ResponseEntity.ok(Map.of(
+                "mensaje", "Estado actualizado a " + nuevoEstado,
+                "status", actualizada.getStatus()
+        ));
     }
 
-    // --- CHECKPOINTS (NFC) ---
+    // ==========================================
+    // --- MÉTODOS DE CHECKPOINTS (NFC) ---
+    // ==========================================
+
     @PostMapping("/checkpoints")
-    public ResponseEntity<Map<String, Object>> crearCheckpoint(@RequestBody Checkpoint checkpoint) {
-        return new ResponseEntity<>(checkpointService.guardarCheckpoint(checkpoint), HttpStatus.CREATED);
+    public ResponseEntity<Map<String, Object>> crearCheckpoint(
+            @RequestParam Long editorId,
+            @RequestBody Checkpoint checkpoint) {
+        return new ResponseEntity<>(checkpointService.guardarCheckpoint(editorId, checkpoint), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/checkpoints/{id}")
+    public ResponseEntity<?> actualizarCheckpoint(
+            @PathVariable Long id,
+            @RequestParam Long editorId,
+            @RequestBody Checkpoint checkpoint) {
+        return ResponseEntity.ok(checkpointService.actualizar(editorId, id, checkpoint));
     }
 
     @GetMapping("/{installationId}/checkpoints")
     public ResponseEntity<?> listarCheckpoints(@PathVariable Long installationId) {
-        // Usamos ResponseEntity<?> para mayor flexibilidad en la respuesta
         return ResponseEntity.ok(checkpointService.obtenerPorInstalacion(installationId));
+    }
+
+    @PatchMapping("/checkpoints/{id}/toggle-status")
+    public ResponseEntity<?> alternarEstadoCheckpoint(
+            @PathVariable Long id,
+            @RequestParam Long editorId) {
+
+        Checkpoint actualizado = checkpointService.alternarEstado(editorId, id);
+        String estadoTxt = actualizado.getStatus() == 1 ? "Activo" : "Inactivo";
+
+        return ResponseEntity.ok(Map.of(
+                "mensaje", "Estado del checkpoint actualizado a " + estadoTxt,
+                "status", actualizado.getStatus(),
+                "id", actualizado.getId()
+        ));
     }
 }

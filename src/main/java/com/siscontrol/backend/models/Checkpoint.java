@@ -1,31 +1,35 @@
 package com.siscontrol.backend.models;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.Data;
-import com.siscontrol.backend.enums.UserStatus;
+import lombok.*;
 
 @Entity
 @Table(name = "checkpoints")
 @Data
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class Checkpoint {
-
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+public class Checkpoint extends Auditable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private String name;
-    private String locationDescription;
+
+    @Column(nullable = false)
+    private Integer executionOrder; //
+
+    @Column(unique = true, nullable = false)
     private String nfcTagCode;
+
+    private String locationDescription;
+
+    @Column(columnDefinition = "TEXT")
+    private String instruction; //
 
     @ManyToOne
     @JoinColumn(name = "installation_id")
-    // Evita que la instalación intente listar sus propios checkpoints de vuelta
-    @JsonIgnoreProperties({"checkpoints", "address", "clientName"})
     private Installation installation;
 
-    @Enumerated(EnumType.STRING)
-    private UserStatus status = UserStatus.ACTIVE; // Agrega esta línea
+    private Integer status = 1;
 }

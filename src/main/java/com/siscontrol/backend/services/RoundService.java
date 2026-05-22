@@ -1,18 +1,13 @@
 package com.siscontrol.backend.services;
 
-import com.siscontrol.backend.models.Checklog;
-import com.siscontrol.backend.models.Installation;
-import com.siscontrol.backend.models.RoundExecution;
-import com.siscontrol.backend.repositories.InstallationRepository;
-import com.siscontrol.backend.repositories.ChecklogRepository;
-import com.siscontrol.backend.repositories.RoundExecutionRepository;
-
 import com.siscontrol.backend.enums.*;
 import com.siscontrol.backend.models.*;
 import com.siscontrol.backend.repositories.*;
 import com.siscontrol.backend.exception.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled; // <-- IMPORTANTE
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -26,17 +21,26 @@ public class RoundService {
     @Autowired private IncidentRepository incidentRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private InstallationRepository installationRepository;
-    @Autowired private CheckpointRepository checkpointRepository; // Agregado para validar existencia de puntos
 
-    // --- JORNADAS ---
+    @Autowired private AlertService alertService;
+
+    // --- JORNADAS (ASISTENCIA) ---
+
+    @Transactional
     public Map<String, Object> iniciarJornada(Long userId, Long installationId) {
-        User worker = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-        if (worker.getRole() != UserRole.GUARD) throw new BadRequestException("Solo guardias inician jornada.");
+        User worker = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        if (shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO).isPresent())
+        if (worker.getStatus() != 1) {
+            throw new ForbiddenException("El usuario está inactivo. Contacte al administrador.");
+        }
+
+        if (shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO).isPresent()) {
             throw new BadRequestException("Ya tienes una jornada en curso.");
+        }
 
-        Installation inst = installationRepository.findById(installationId).orElseThrow(() -> new ResourceNotFoundException("Instalación no encontrada."));
+        Installation inst = installationRepository.findById(installationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Instalación no encontrada."));
 
         Shift shift = new Shift();
         shift.setWorker(worker);
@@ -44,133 +48,249 @@ public class RoundService {
         shift.setEntryTime(LocalDateTime.now());
         shift.setStatus(ShiftStatus.EN_CURSO);
 
-        return Map.of("mensaje", "Jornada iniciada", "jornada", shiftRepository.save(shift));
+        return Map.of("mensaje", "Jornada inició exitosamente", "jornada", shiftRepository.save(shift));
     }
 
-    public Map<String, Object> finalizarJornada(Long id) {
-        Shift shift = shiftRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Jornada no encontrada."));
-        if (roundExecutionRepository.existsByWorkerIdAndStatus(shift.getWorker().getId(), RoundStatus.EN_PROGRESO))
-            throw new BadRequestException("Termina la ronda antes de cerrar jornada.");
+    @Transactional
+    public Map<String, Object> finalizarJornada(Long userId, Long installationId) {
+        Shift shift = shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO)
+                .orElseThrow(() -> new ResourceNotFoundException("No tienes ninguna jornada en curso para esta instalación."));
 
         shift.setExitTime(LocalDateTime.now());
         shift.setStatus(ShiftStatus.FINALIZADO);
-        return Map.of("mensaje", "Jornada finalizada", "jornada", shiftRepository.save(shift));
+
+        return Map.of("mensaje", "Salida registrada con éxito", "jornada", shiftRepository.save(shift));
     }
 
-    public Map<String, Object> cancelarJornada(Long id, Long adminId) {
+    @Transactional
+    public Map<String, Object> cancelarJornadaAdministrativamente(Long id, Long adminId) {
+        validarAdminOSupervisor(adminId);
+
         Shift shift = shiftRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Jornada no encontrada con ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Jornada (Shift) no encontrada con ID: " + id));
 
-        userRepository.findById(adminId).orElseThrow(() -> new ResourceNotFoundException("Administrador no encontrado"));
+        if (shift.getStatus() == ShiftStatus.FINALIZADO) {
+            throw new BadRequestException("Esta jornada ya se encuentra finalizada.");
+        }
 
-        shift.setStatus(ShiftStatus.CANCELADO);
         shift.setExitTime(LocalDateTime.now());
+        shift.setStatus(ShiftStatus.FINALIZADO);
 
-        return Map.of("mensaje", "Jornada cancelada por administrador", "jornada", shiftRepository.save(shift));
+        return Map.of(
+                "mensaje", "Jornada cancelada/finalizada de forma remota por el administrador",
+                "jornada", shiftRepository.save(shift)
+        );
     }
 
-    // --- RONDAS ---
-    public Map<String, Object> iniciarRonda(Long userId, Long installationId) {
-        shiftRepository.findByWorkerIdAndInstallationIdAndStatus(userId, installationId, ShiftStatus.EN_CURSO)
-                .orElseThrow(() -> new BadRequestException("No tienes jornada activa aquí."));
+    // --- CONTROL DE RONDAS ---
 
-        if (roundExecutionRepository.existsByWorkerIdAndStatus(userId, RoundStatus.EN_PROGRESO))
-            throw new BadRequestException("Ya hay una ronda en progreso.");
+    @Transactional
+    public Map<String, Object> iniciarRonda(Long userId, Long installationId) {
+        User worker = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        if (worker.getStatus() != 1) {
+            throw new ForbiddenException("El guardia se encuentra inactivo. No puede iniciar rondas.");
+        }
+
+        boolean tieneJornadaActiva = shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO).isPresent();
+        if (!tieneJornadaActiva) {
+            throw new BadRequestException("Debe iniciar su jornada laboral (Asistencia) antes de comenzar una ronda.");
+        }
+
+        Installation inst = installationRepository.findById(installationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Instalación no encontrada"));
 
         RoundExecution round = new RoundExecution();
-        round.setWorker(userRepository.getReferenceById(userId));
-        round.setInstallation(installationRepository.getReferenceById(installationId));
+        round.setWorker(worker);
+        round.setInstallation(inst);
         round.setStartTime(LocalDateTime.now());
         round.setStatus(RoundStatus.EN_PROGRESO);
 
         return Map.of("mensaje", "Ronda iniciada", "ronda", roundExecutionRepository.save(round));
     }
 
-    public Map<String, Object> finalizarRonda(Long id) {
+    @Transactional
+    public Map<String, Object> finalizarRonda(Long id, String observations) {
         RoundExecution round = roundExecutionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada con ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada"));
 
-        if (round.getStatus() != RoundStatus.EN_PROGRESO) {
-            throw new BadRequestException("La ronda ya no está en progreso.");
+        if (round.getStatus() == RoundStatus.FINALIZADA) {
+            throw new BadRequestException("Esta ronda ya fue finalizada anteriormente.");
         }
 
-        round.setEndTime(LocalDateTime.now());
         round.setStatus(RoundStatus.FINALIZADA);
+        round.setEndTime(LocalDateTime.now());
+        round.setObservations(observations);
 
-        return Map.of("mensaje", "Ronda finalizada", "ronda", roundExecutionRepository.save(round));
+        RoundExecution guardada = roundExecutionRepository.save(round);
+
+        // DISPARAR ALERTA INFORMATIVA AUTOMÁTICA (Pestaña Info)
+        Incident infoRonda = new Incident();
+        infoRonda.setTitle("ℹ️ Ronda completada");
+        infoRonda.setDescription("Todos los checkpoints verificados por " + round.getWorker().getFullName() + " en " + round.getInstallation().getName());
+        infoRonda.setSeverity("Baja"); // Pestaña de información (Azul)
+        infoRonda.setStatus(1); // Auto-atendido / Cerrado
+        infoRonda.setType(com.siscontrol.backend.enums.IncidentType.HALLAZGO);
+        infoRonda.setRoundExecution(guardada);
+
+        alertService.registrarYDispararAlerta(infoRonda);
+
+        return Map.of("mensaje", "Ronda finalizada con éxito", "ronda", guardada);
     }
 
-    public Map<String, Object> cancelarRonda(Long id, Long adminId, String motivo) {
+    @Transactional
+    public Map<String, Object> cancelarRondaAdministrativamente(Long id, Long adminId, String motivo) {
+        validarAdminOSupervisor(adminId);
+
         RoundExecution round = roundExecutionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada con ID: " + id));
 
-        userRepository.findById(adminId).orElseThrow(() -> new ResourceNotFoundException("Administrador no encontrado"));
+        if (round.getStatus() == RoundStatus.FINALIZADA) {
+            throw new BadRequestException("No se puede cancelar una ronda que ya fue finalizada.");
+        }
 
-        round.setStatus(RoundStatus.CANCELADA);
+        round.setStatus(RoundStatus.FINALIZADA);
         round.setEndTime(LocalDateTime.now());
+        round.setObservations("[CANCELACIÓN ADMINISTRATIVA]: " + (motivo != null ? motivo : "Sin motivo especificado"));
 
         return Map.of(
-                "mensaje", "Ronda cancelada por administrador",
-                "motivo", motivo,
+                "mensaje", "Ronda canceled administrativamente con éxito",
                 "ronda", roundExecutionRepository.save(round)
         );
     }
 
-    // --- REGISTRO DE ESCANEO (Corregido con validación de existencia) ---
+    // --- ESCANEOS ---
+
+    @Transactional
     public Map<String, Object> registrarEscaneo(Checklog log) {
-        // 1. Validar Ronda
+        if (log.getRoundExecution() == null || log.getRoundExecution().getId() == null) {
+            throw new BadRequestException("El escaneo debe estar vinculado a un ID de ejecución de ronda válido.");
+        }
+
         RoundExecution round = roundExecutionRepository.findById(log.getRoundExecution().getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada."));
+                .orElseThrow(() -> new ResourceNotFoundException("La ronda vinculada al escaneo no existe."));
 
-        if (round.getStatus() != RoundStatus.EN_PROGRESO) throw new BadRequestException("Ronda no activa.");
-
-        // 2. Validar Existencia del Checkpoint (Para evitar error de Constraint en DB)
-        if (log.getCheckpoint() == null || log.getCheckpoint().getId() == null) {
-            throw new BadRequestException("El punto de control es obligatorio.");
+        if (round.getStatus() == RoundStatus.FINALIZADA) {
+            throw new BadRequestException("No se pueden registrar puntos de control en una ronda que ya está finalizada.");
         }
 
-        if (!checkpointRepository.existsById(log.getCheckpoint().getId())) {
-            throw new ResourceNotFoundException("El punto de control con ID " + log.getCheckpoint().getId() + " no existe.");
+        log.setScannedAt(LocalDateTime.now());
+
+        if (log.getStatus() == null) {
+            log.setStatus(1);
         }
 
-        // 3. Validar duplicados
-        if (checklogRepository.existsByRoundExecutionIdAndCheckpointId(round.getId(), log.getCheckpoint().getId()))
-            throw new BadRequestException("Punto ya escaneado.");
+        Checklog guardado = checklogRepository.save(log);
 
-        log.setTimestamp(LocalDateTime.now());
-        return Map.of("mensaje", "Escaneo registrado", "escaneo", checklogRepository.save(log));
-    }
+        if (guardado.getStatus() == 2) {
+            Incident alertaOmision = new Incident();
+            alertaOmision.setTitle("⚠️ Checkpoint no escaneado");
 
-    // --- CONSULTAS (Sin cambios, manteniendo tu lógica original) ---
-    public Map<String, Object> obtenerEstadisticasGlobales(LocalDateTime inicio, LocalDateTime fin) {
-        Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("totalRondas", roundExecutionRepository.count());
-        stats.put("totalIncidentes", incidentRepository.count());
-        stats.put("jornadasActivas", shiftRepository.findAll().stream().filter(s -> s.getStatus() == ShiftStatus.EN_CURSO).count());
-        return stats;
+            String motivo = (guardado.getNotes() != null && !guardado.getNotes().trim().isEmpty())
+                    ? guardado.getNotes()
+                    : "Ronda incompleta detectada (Punto saltado sin observaciones)";
+
+            alertaOmision.setDescription(motivo);
+            alertaOmision.setSeverity("Media"); // Pestaña de Advertencia
+            alertaOmision.setStatus(0);
+            alertaOmision.setType(com.siscontrol.backend.enums.IncidentType.MANTENCION);
+            alertaOmision.setRoundExecution(round);
+            alertaOmision.setChecklog(guardado);
+
+            alertService.registrarYDispararAlerta(alertaOmision);
+        }
+
+        String mensajeExito = (guardado.getStatus() == 2)
+                ? "Punto de control omitido con justificación correctamente. Secuencia liberada."
+                : "Escaneo de punto de control registrado exitosamente.";
+
+        return Map.of("mensaje", mensajeExito, "escaneo", guardado);
     }
 
     public Map<String, Object> obtenerDetalleRonda(Long id) {
-        RoundExecution round = roundExecutionRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada"));
-        return Map.of("ronda", round, "escaneos", checklogRepository.findByRoundExecutionId(id), "incidentes", incidentRepository.findByRoundExecutionId(id));
+        RoundExecution round = roundExecutionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada"));
+
+        return Map.of(
+                "ronda", round,
+                "escaneos", checklogRepository.findByRoundExecutionId(id),
+                "incidentes", incidentRepository.findByRoundExecutionId(id)
+        );
     }
 
     public List<RoundExecution> filtrarRondas(String fecha, Long installationId, Long userId) {
-        List<RoundExecution> todas = roundExecutionRepository.findAll();
-
-        return todas.stream()
+        return roundExecutionRepository.findAll().stream()
                 .filter(r -> {
                     boolean coincideFecha = (fecha == null) || r.getStartTime().toLocalDate().toString().equals(fecha);
                     boolean coincideInst = (installationId == null) || (r.getInstallation().getId().equals(installationId));
                     boolean coincideUser = (userId == null) || (r.getWorker().getId().equals(userId));
-
                     return coincideFecha && coincideInst && coincideUser;
                 })
                 .collect(Collectors.toList());
     }
 
-    public Object obtenerRondasSegunRol(Long requesterId) {
-        User user = userRepository.findById(requesterId).orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-        return (user.getRole() == UserRole.GUARD) ? roundExecutionRepository.findByWorkerId(requesterId) : roundExecutionRepository.findAll();
+    // --- ESTADO EN TIEMPO REAL ---
+    public Map<String, Object> verificarEstadoActual(Long userId) {
+        Optional<Shift> jornadaOpt = shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO);
+
+        Optional<RoundExecution> rondaOpt = roundExecutionRepository.findAll().stream()
+                .filter(r -> r.getWorker() != null && r.getWorker().getId().equals(userId) && r.getStatus() == RoundStatus.EN_PROGRESO)
+                .findFirst();
+
+        Map<String, Object> estado = new HashMap<>();
+        estado.put("jornadaActiva", jornadaOpt.isPresent());
+        estado.put("rondaActiva", rondaOpt.isPresent());
+        estado.put("jornada", jornadaOpt.orElse(null));
+        estado.put("ronda", rondaOpt.orElse(null));
+
+        return estado;
+    }
+
+    // --- AUTOMATIZACIÓN: DETECCIÓN DE INACTIVIDAD (Pestaña Advertencia) ---
+    @Scheduled(fixedRate = 300000) // Se ejecuta automáticamente cada 5 minutos
+    @Transactional
+    public void verificarRondasInactivas() {
+        LocalDateTime limiteInactividad = LocalDateTime.now().minusMinutes(15);
+
+        List<RoundExecution> rondasActivas = roundExecutionRepository.findAll().stream()
+                .filter(r -> r.getStatus() == RoundStatus.EN_PROGRESO)
+                .toList();
+
+        for (RoundExecution ronda : rondasActivas) {
+            List<Checklog> escaneos = checklogRepository.findByRoundExecutionId(ronda.getId());
+
+            LocalDateTime ultimaActividad = ronda.getStartTime();
+            if (!escaneos.isEmpty()) {
+                escaneos.sort((c1, c2) -> c2.getScannedAt().compareTo(c1.getScannedAt()));
+                ultimaActividad = escaneos.get(0).getScannedAt();
+            }
+
+            if (ultimaActividad.isBefore(limiteInactividad)) {
+                List<Incident> incidentesExistentes = incidentRepository.findByRoundExecutionId(ronda.getId());
+                boolean yaAlertado = incidentesExistentes.stream()
+                        .anyMatch(i -> i.getTitle().equals("⏳ Alerta: Ronda Incompleta"));
+
+                if (!yaAlertado) {
+                    Incident advertencia = new Incident();
+                    advertencia.setTitle("⏳ Alerta: Ronda Incompleta");
+                    advertencia.setDescription("Se ha detectado inactividad prolongada en " + ronda.getInstallation().getName() + " (más de 15 minutos sin registrar lecturas NFC).");
+                    advertencia.setSeverity("Media"); // Pestaña de Advertencia (Amarillo)
+                    advertencia.setStatus(0);
+                    advertencia.setType(com.siscontrol.backend.enums.IncidentType.MANTENCION);
+                    advertencia.setRoundExecution(ronda);
+
+                    alertService.registrarYDispararAlerta(advertencia);
+                }
+            }
+        }
+    }
+
+    private void validarAdminOSupervisor(Long editorId) {
+        User editor = userRepository.findById(editorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario supervisor/administrador no encontrado"));
+        if (editor.getRole() == UserRole.GUARD) {
+            throw new ForbiddenException("Acceso denegado: Los guardias no tienen los privilegios requeridos para esta acción administrativa.");
+        }
     }
 }

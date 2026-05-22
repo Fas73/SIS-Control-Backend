@@ -1,11 +1,12 @@
 package com.siscontrol.backend.controllers;
 
 import java.util.Map;
-import java.util.List;
-import com.siscontrol.backend.enums.UserStatus;
 import com.siscontrol.backend.dto.CreateUserRequestDTO;
 import com.siscontrol.backend.dto.UserResponseDTO;
 import com.siscontrol.backend.enums.UserRole;
+import com.siscontrol.backend.models.User;
+import com.siscontrol.backend.repositories.UserRepository;
+import com.siscontrol.backend.exception.ResourceNotFoundException;
 import com.siscontrol.backend.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -20,43 +21,67 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @PostMapping
-    public ResponseEntity<UserResponseDTO> crearUsuario(@RequestParam Long creatorId, @RequestBody CreateUserRequestDTO request) {
+    public ResponseEntity<UserResponseDTO> crearUsuario(
+            @RequestParam Long creatorId,
+            @RequestBody CreateUserRequestDTO request) {
         return new ResponseEntity<>(userService.crearUsuario(creatorId, request), HttpStatus.CREATED);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<UserResponseDTO> actualizarUsuario(@PathVariable Long id, @RequestParam Long editorId, @RequestBody CreateUserRequestDTO request) {
+    public ResponseEntity<UserResponseDTO> actualizarUsuario(
+            @PathVariable Long id,
+            @RequestParam Long editorId,
+            @RequestBody CreateUserRequestDTO request) {
         return ResponseEntity.ok(userService.actualizarUsuario(editorId, id, request));
     }
 
+    // --- NUEVO ENDPOINT: ACTUALIZAR FOTO DE PERFIL DESDE ANDROID ---
+    // PATCH http://localhost:8080/api/usuarios/9/profile-image?url=https://...
+    @PatchMapping("/{id}/profile-image")
+    public ResponseEntity<UserResponseDTO> actualizarFotoPerfil(
+            @PathVariable Long id,
+            @RequestParam String url) {
+
+        UserResponseDTO actualizado = userService.actualizarFotoPerfil(id, url);
+        return ResponseEntity.ok(actualizado);
+    }
+
     @PatchMapping("/{id}/status")
-    public ResponseEntity<UserResponseDTO> cambiarEstado(@PathVariable Long id, @RequestParam Long editorId, @RequestParam UserStatus status) {
+    public ResponseEntity<UserResponseDTO> cambiarEstado(
+            @PathVariable Long id,
+            @RequestParam Long editorId,
+            @RequestParam Integer status) {
         return ResponseEntity.ok(userService.cambiarEstado(editorId, id, status));
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, String>> eliminarUsuario(@PathVariable Long id, @RequestParam Long editorId) {
-        userService.eliminarUsuario(editorId, id);
-        return ResponseEntity.ok(Map.of("mensaje", "Usuario desactivado correctamente"));
+    @PatchMapping("/{id}/toggle-status")
+    public ResponseEntity<UserResponseDTO> toggleStatus(
+            @PathVariable Long id,
+            @RequestParam Long editorId) {
+
+        User targetUser = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con ID: " + id));
+
+        Integer nuevoEstado = (targetUser.getStatus() == 1) ? 0 : 1;
+
+        return ResponseEntity.ok(userService.cambiarEstado(editorId, id, nuevoEstado));
     }
 
-    // --- CONSULTAS CON MENSAJES DE LISTA VACÍA ---
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, String>> eliminarUsuario(
+            @PathVariable Long id,
+            @RequestParam Long editorId) {
+        userService.eliminarUsuario(editorId, id);
+        return ResponseEntity.ok(Map.of("mensaje", "Usuario desactivado correctamente (status 0)"));
+    }
 
-    // URL: http://localhost:8080/api/usuarios?requesterId=1
     @GetMapping
-    public ResponseEntity<?> listarTodos(@RequestParam Long requesterId) {
-        // Usamos List<?> para evitar el error de tipos incompatibles si el Service devuelve Object o List genérica
-        Object resultado = userService.listarTodos();
-
-        if (resultado instanceof List) {
-            List<?> lista = (List<?>) resultado;
-            if (lista.isEmpty()) {
-                return ResponseEntity.ok(Map.of("mensaje", "No hay usuarios registrados en el sistema."));
-            }
-        }
-
-        return ResponseEntity.ok(resultado);
+    public ResponseEntity<?> listarTodos() {
+        return ResponseEntity.ok(userService.listarTodos());
     }
 
     @GetMapping("/{id}")
@@ -64,23 +89,16 @@ public class UserController {
         return ResponseEntity.ok(userService.obtenerPorId(id));
     }
 
-    // URL: http://localhost:8080/api/usuarios/role/supervisor
     @GetMapping("/role/{role}")
     public ResponseEntity<?> obtenerPorRol(@PathVariable String role) {
         try {
             UserRole roleEnum = UserRole.valueOf(role.toUpperCase());
-            Object resultado = userService.obtenerPorRol(roleEnum);
-
-            if (resultado instanceof List) {
-                List<?> lista = (List<?>) resultado;
-                if (lista.isEmpty()) {
-                    return ResponseEntity.ok(Map.of("mensaje", "No se encontraron usuarios con el rol: " + role.toUpperCase()));
-                }
-            }
-            return ResponseEntity.ok(resultado);
-
+            return ResponseEntity.ok(userService.obtenerPorRol(roleEnum));
         } catch (IllegalArgumentException e) {
-            return new ResponseEntity<>(Map.of("error", "El rol '" + role + "' no es válido."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(
+                    Map.of("error", "El rol '" + role + "' no es válido. Use ADMIN, SUPERVISOR o GUARD."),
+                    HttpStatus.BAD_REQUEST
+            );
         }
     }
 }

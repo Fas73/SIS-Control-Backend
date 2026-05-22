@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Falta el parámetro obligatorio: " + ex.getParameterName());
     }
 
-    // 5. Método HTTP incorrecto (405)
+    // 5. Metodo HTTP incorrecto (405)
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<Map<String, Object>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
         return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, "Método " + ex.getMethod() + " no permitido para esta ruta.");
@@ -111,6 +111,20 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.NOT_FOUND, "La ruta /" + ex.getResourcePath() + " no existe.");
     }
 
+
+    // Nuevo metodo para capturar duplicados y errores de consulta
+    @ExceptionHandler({org.springframework.dao.IncorrectResultSizeDataAccessException.class,
+            org.springframework.dao.DataIntegrityViolationException.class})
+    public ResponseEntity<Map<String, Object>> handleDatabaseDuplicates(Exception ex) {
+        String mensaje = "Error de datos: Ya existen múltiples registros con este mismo código NFC o el dato es duplicado. Por favor, limpie la base de datos.";
+
+        // Si es una violación de integridad (Unique constraint de SQL)
+        if (ex instanceof org.springframework.dao.DataIntegrityViolationException) {
+            mensaje = "El código NFC ya está registrado en el sistema.";
+        }
+
+        return buildResponse(HttpStatus.CONFLICT, mensaje);
+    }
     // 9. Error General (500)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {

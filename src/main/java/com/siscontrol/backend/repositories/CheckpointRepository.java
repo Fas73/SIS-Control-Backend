@@ -8,8 +8,15 @@ import java.util.Optional;
 
 @Repository
 public interface CheckpointRepository extends JpaRepository<Checkpoint, Long> {
-    List<Checkpoint> findByInstallationId(Long installationId);
 
-    // Necesario para validar que un Tag NFC no se use en dos lados
+    List<Checkpoint> findByInstallationIdOrderByExecutionOrderAsc(Long installationId);
+
     Optional<Checkpoint> findByNfcTagCode(String nfcTagCode);
+
+    boolean existsByInstallationIdAndExecutionOrderAndStatus(Long installationId, Integer executionOrder, Integer status);
+
+    boolean existsByInstallationIdAndExecutionOrderAndStatusAndIdNot(Long installationId, Integer executionOrder, Integer status, Long id);
+
+    // Consulta indispensable para el cálculo dinámico del total de puntos (Número B)
+    long countByInstallationIdAndStatus(Long installationId, Integer status);
 }
