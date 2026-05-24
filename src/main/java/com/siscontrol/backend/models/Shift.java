@@ -24,8 +24,17 @@ public class Shift {
     @JoinColumn(name = "user_id")
     private User worker;
 
+    @Column(name = "entry_time", nullable = false, columnDefinition = "DATETIME(3)")
     private LocalDateTime entryTime;
+
+    @Column(name = "exit_time", columnDefinition = "DATETIME(3)")
     private LocalDateTime exitTime;
+
+    @Column(name = "device_entry_time", columnDefinition = "DATETIME(3)")
+    private LocalDateTime deviceEntryTime;
+
+    @Column(name = "device_exit_time", columnDefinition = "DATETIME(3)")
+    private LocalDateTime deviceExitTime;
 
     @Enumerated(EnumType.STRING)
     private ShiftStatus status;

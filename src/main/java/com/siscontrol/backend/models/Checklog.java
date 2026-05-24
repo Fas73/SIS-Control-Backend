@@ -22,8 +22,11 @@ public class Checklog extends Auditable { // HEREDA DE AUDITABLE para trazar qui
     private Long id;
 
     // Sustituimos 'timestamp' por scannedAt para ser más descriptivos
-    @Column(name = "scanned_at", nullable = false)
+    @Column(name = "scanned_at", nullable = false, columnDefinition = "DATETIME(3)")
     private LocalDateTime scannedAt = LocalDateTime.now();
+
+    @Column(name = "device_scanned_at", columnDefinition = "DATETIME(3)")
+    private LocalDateTime deviceScannedAt;
 
     @ManyToOne
     @JoinColumn(name = "execution_id", nullable = false)

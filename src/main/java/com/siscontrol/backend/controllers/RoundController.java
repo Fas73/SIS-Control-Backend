@@ -19,7 +19,10 @@ public class RoundController {
     // --- CONTROL DE RONDAS ---
 
     @PostMapping("/iniciar")
-    public ResponseEntity<?> iniciarRonda(@RequestParam Long userId, @RequestParam Long installationId) {
+    public ResponseEntity<?> iniciarRonda(
+            @RequestParam Long userId,
+            @RequestParam Long installationId,
+            @RequestParam(required = false) String deviceStartTime) {
         return new ResponseEntity<>(roundService.iniciarRonda(userId, installationId), HttpStatus.CREATED);
     }
 

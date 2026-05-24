@@ -28,6 +28,11 @@ public class RoundService {
 
     @Transactional
     public Map<String, Object> iniciarJornada(Long userId, Long installationId) {
+        return iniciarJornada(userId, installationId, null);
+    }
+
+    @Transactional
+    public Map<String, Object> iniciarJornada(Long userId, Long installationId, LocalDateTime deviceEntryTime) {
         User worker = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
@@ -46,6 +51,7 @@ public class RoundService {
         shift.setWorker(worker);
         shift.setInstallation(inst);
         shift.setEntryTime(LocalDateTime.now());
+        shift.setDeviceEntryTime(deviceEntryTime);
         shift.setStatus(ShiftStatus.EN_CURSO);
 
         return Map.of("mensaje", "Jornada inició exitosamente", "jornada", shiftRepository.save(shift));
@@ -53,10 +59,16 @@ public class RoundService {
 
     @Transactional
     public Map<String, Object> finalizarJornada(Long userId, Long installationId) {
+        return finalizarJornada(userId, installationId, null);
+    }
+
+    @Transactional
+    public Map<String, Object> finalizarJornada(Long userId, Long installationId, LocalDateTime deviceExitTime) {
         Shift shift = shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO)
                 .orElseThrow(() -> new ResourceNotFoundException("No tienes ninguna jornada en curso para esta instalación."));
 
         shift.setExitTime(LocalDateTime.now());
+        shift.setDeviceExitTime(deviceExitTime);
         shift.setStatus(ShiftStatus.FINALIZADO);
 
         return Map.of("mensaje", "Salida registrada con éxito", "jornada", shiftRepository.save(shift));
@@ -86,6 +98,11 @@ public class RoundService {
 
     @Transactional
     public Map<String, Object> iniciarRonda(Long userId, Long installationId) {
+        return iniciarRonda(userId, installationId, null);
+    }
+
+    @Transactional
+    public Map<String, Object> iniciarRonda(Long userId, Long installationId, LocalDateTime deviceStartTime) {
         User worker = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
@@ -105,6 +122,7 @@ public class RoundService {
         round.setWorker(worker);
         round.setInstallation(inst);
         round.setStartTime(LocalDateTime.now());
+        round.setDeviceStartTime(deviceStartTime);
         round.setStatus(RoundStatus.EN_PROGRESO);
 
         return Map.of("mensaje", "Ronda iniciada", "ronda", roundExecutionRepository.save(round));
@@ -112,6 +130,11 @@ public class RoundService {
 
     @Transactional
     public Map<String, Object> finalizarRonda(Long id, String observations) {
+        return finalizarRonda(id, observations, null);
+    }
+
+    @Transactional
+    public Map<String, Object> finalizarRonda(Long id, String observations, LocalDateTime deviceEndTime) {
         RoundExecution round = roundExecutionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ronda no encontrada"));
 
@@ -121,6 +144,7 @@ public class RoundService {
 
         round.setStatus(RoundStatus.FINALIZADA);
         round.setEndTime(LocalDateTime.now());
+        round.setDeviceEndTime(deviceEndTime);
         round.setObservations(observations);
 
         RoundExecution guardada = roundExecutionRepository.save(round);
