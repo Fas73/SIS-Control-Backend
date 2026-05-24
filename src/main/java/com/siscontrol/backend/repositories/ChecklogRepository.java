@@ -9,5 +9,6 @@ import java.util.List;
 public interface ChecklogRepository extends JpaRepository<Checklog, Long> {
     boolean existsByRoundExecutionIdAndCheckpointId(Long roundExecutionId, Long checkpointId);
     List<Checklog> findByRoundExecutionId(Long roundExecutionId);
+    List<Checklog> findByRoundExecutionIdOrderByScannedAtAsc(Long roundExecutionId);
     long countByRoundExecutionId(Long roundExecutionId);
 }
