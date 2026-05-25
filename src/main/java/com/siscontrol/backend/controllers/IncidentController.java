@@ -70,4 +70,10 @@ public class IncidentController {
     public ResponseEntity<IncidentDTO> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(incidentService.obtenerPorId(id));
     }
+
+    // POST http://localhost:8080/api/incidents/1/analizar-ia
+    @PostMapping("/{id}/analizar-ia")
+    public ResponseEntity<IncidentDTO> analizarIA(@PathVariable Long id) {
+        return ResponseEntity.ok(incidentService.analizarConIA(id));
+    }
 }

@@ -44,6 +44,28 @@ public class Incident {
     @Column(nullable = false, columnDefinition = "int default 0")
     private Integer status = 0; // 0 = Reportado/Pendiente, 1 = Atendido/Resuelto
 
+    // --- NUEVOS CAMPOS PARA ANALISIS IA GEMINI (MVP) ---
+    @Column(columnDefinition = "TEXT")
+    private String descripcionOriginal;
+
+    private String tipoIncidenteIA;
+    private String prioridadIA;
+
+    @Column(columnDefinition = "TEXT")
+    private String resumenIA;
+
+    @Column(columnDefinition = "TEXT")
+    private String accionSugeridaIA;
+
+    private Boolean requiereAtencionInmediata;
+    private String estadoAnalisisIA; // PENDIENTE, ANALIZADO, ERROR
+    private LocalDateTime fechaAnalisisIA;
+    private String modeloIA;
+
     @PrePersist
-    protected void onCreate() { if (createdAt == null) createdAt = LocalDateTime.now(); }
+    protected void onCreate() {
+        if (createdAt == null) createdAt = LocalDateTime.now();
+        if (descripcionOriginal == null) descripcionOriginal = description;
+        if (estadoAnalisisIA == null) estadoAnalisisIA = "PENDIENTE";
+    }
 }

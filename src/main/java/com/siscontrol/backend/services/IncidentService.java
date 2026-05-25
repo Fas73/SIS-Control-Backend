@@ -28,6 +28,11 @@ public class IncidentService {
     @Autowired
     private ChecklogRepository checklogRepository;
 
+    @Autowired
+    private GeminiIncidentAnalyzerService geminiIncidentAnalyzerService;
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(IncidentService.class);
+
     @Transactional
     public IncidentDTO reportarIncidente(IncidentDTO dto) {
         IncidentType tipoFinal;
@@ -49,6 +54,7 @@ public class IncidentService {
         Incident entity = new Incident();
         entity.setTitle(dto.getTitle());
         entity.setDescription(dto.getDescription());
+        entity.setDescripcionOriginal(dto.getDescription()); // Guardar siempre la descripción original sin modificar
         entity.setSeverity(dto.getSeverity());
         entity.setImageUrl(dto.getImageUrl());
         entity.setType(tipoFinal);
@@ -90,6 +96,17 @@ public class IncidentService {
         dto.setCreatedAt(i.getCreatedAt());
         dto.setStatus(i.getStatus());
 
+        // --- MAPEO DE CAMPOS IA GEMINI ---
+        dto.setDescripcionOriginal(i.getDescripcionOriginal());
+        dto.setTipoIncidenteIA(i.getTipoIncidenteIA());
+        dto.setPrioridadIA(i.getPrioridadIA());
+        dto.setResumenIA(i.getResumenIA());
+        dto.setAccionSugeridaIA(i.getAccionSugeridaIA());
+        dto.setRequiereAtencionInmediata(i.getRequiereAtencionInmediata());
+        dto.setEstadoAnalisisIA(i.getEstadoAnalisisIA());
+        dto.setFechaAnalisisIA(i.getFechaAnalisisIA());
+        dto.setModeloIA(i.getModeloIA());
+
         // Desglose relacional para evitar nulos y mapear nombres reales a Android
         if (i.getRoundExecution() != null) {
             dto.setRoundExecutionId(i.getRoundExecution().getId());
@@ -110,5 +127,55 @@ public class IncidentService {
         }
 
         return dto;
+    }
+
+    @Transactional
+    public IncidentDTO analizarConIA(Long id) {
+        Incident incidente = incidentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Incidente no encontrado con ID: " + id));
+
+        // Si ya está analizado con éxito, no repetir llamada innecesaria
+        if ("ANALIZADO".equals(incidente.getEstadoAnalisisIA())) {
+            return convertirADTO(incidente);
+        }
+
+        // Guardar estado PENDIENTE al iniciar
+        incidente.setEstadoAnalisisIA("PENDIENTE");
+        incidente.setFechaAnalisisIA(java.time.LocalDateTime.now());
+        incidente.setModeloIA("gemini-2.5-flash");
+        incidentRepository.saveAndFlush(incidente);
+
+        try {
+            // Obtener descripción original (si es nula, usar description)
+            String desc = incidente.getDescripcionOriginal();
+            if (desc == null || desc.trim().isEmpty()) {
+                desc = incidente.getDescription();
+            }
+
+            GeminiIncidentAnalyzerService.IAAnalysisResult result =
+                    geminiIncidentAnalyzerService.analizarIncidente(
+                            incidente.getTitle(),
+                            incidente.getType() != null ? incidente.getType().name() : "OTRO",
+                            incidente.getSeverity(),
+                            desc
+                    );
+
+            // Asignar los campos retornados por el servicio
+            incidente.setTipoIncidenteIA(result.tipoIncidente);
+            incidente.setPrioridadIA(result.prioridadIA);
+            incidente.setResumenIA(result.resumenIA);
+            incidente.setAccionSugeridaIA(result.accionSugeridaIA);
+            incidente.setRequiereAtencionInmediata(result.requiereAtencionInmediata);
+            incidente.setEstadoAnalisisIA("ANALIZADO");
+            incidente.setFechaAnalisisIA(java.time.LocalDateTime.now());
+            
+        } catch (Exception e) {
+            log.error("Error al analizar incidente con Gemini para el ID: {}", id, e);
+            incidente.setEstadoAnalisisIA("ERROR");
+            incidente.setFechaAnalisisIA(java.time.LocalDateTime.now());
+        }
+
+        Incident saved = incidentRepository.save(incidente);
+        return convertirADTO(saved);
     }
 }

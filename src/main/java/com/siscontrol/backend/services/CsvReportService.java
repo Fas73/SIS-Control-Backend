@@ -52,7 +52,7 @@ public class CsvReportService {
             writer.write('\ufeff');
 
             // Encabezados
-            writer.write("ID Instalación,Nombre Instalación,ID Guardia,Nombre Guardia,ID Ronda,Estado Ronda,Inicio Ronda,Término Ronda,ID Checkpoint,Nombre Checkpoint,Fecha/Hora Marcación,Minutos desde anterior,Alertas/Incidentes,Observación final,Generado en\n");
+            writer.write("ID Instalación,Nombre Instalación,ID Guardia,Nombre Guardia,ID Ronda,Estado Ronda,Inicio Ronda,Término Ronda,ID Checkpoint,Nombre Checkpoint,Fecha/Hora Marcación,Minutos desde anterior,Alertas/Incidentes,Observación final,Generado en,Descripción Original,Tipo Incidente IA,Prioridad IA,Resumen IA,Acción Sugerida IA,Requiere Atención Inmediata\n");
 
             List<RoundExecution> rondas = roundExecutionRepository.findAll();
             String generatedAtStr = now.toString();
@@ -76,11 +76,35 @@ public class CsvReportService {
                             escapeCsv(instId), escapeCsv(instName), escapeCsv(workerId), escapeCsv(workerName),
                             escapeCsv(roundId), escapeCsv(status), escapeCsv(start), escapeCsv(end),
                             "", "", "", "", escapeCsv(getIncidentesResumen(roundIncidents, null)),
-                            escapeCsv(obs), escapeCsv(generatedAtStr)
+                            escapeCsv(obs), escapeCsv(generatedAtStr),
+                            escapeCsv(getIncidentesCampoIA(roundIncidents, null, "descripcionOriginal")),
+                            escapeCsv(getIncidentesCampoIA(roundIncidents, null, "tipoIncidenteIA")),
+                            escapeCsv(getIncidentesCampoIA(roundIncidents, null, "prioridadIA")),
+                            escapeCsv(getIncidentesCampoIA(roundIncidents, null, "resumenIA")),
+                            escapeCsv(getIncidentesCampoIA(roundIncidents, null, "accionSugeridaIA")),
+                            escapeCsv(getIncidentesCampoIA(roundIncidents, null, "requiereAtencionInmediata"))
                     ) + "\n");
                     rowCount++;
                 } else {
                     LocalDateTime previousTime = null;
+
+                    // Si la ronda tiene incidentes generales (sin checklog asociado), se reportan en una fila propia al inicio
+                    boolean tieneIncidentesGenerales = roundIncidents.stream().anyMatch(i -> i.getChecklog() == null);
+                    if (tieneIncidentesGenerales) {
+                        writer.write(String.join(",",
+                                escapeCsv(instId), escapeCsv(instName), escapeCsv(workerId), escapeCsv(workerName),
+                                escapeCsv(roundId), escapeCsv(status), escapeCsv(start), escapeCsv(end),
+                                "", "", "", "", escapeCsv(getIncidentesResumen(roundIncidents, null)),
+                                escapeCsv(obs), escapeCsv(generatedAtStr),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, null, "descripcionOriginal")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, null, "tipoIncidenteIA")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, null, "prioridadIA")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, null, "resumenIA")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, null, "accionSugeridaIA")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, null, "requiereAtencionInmediata"))
+                        ) + "\n");
+                        rowCount++;
+                    }
 
                     for (Checklog log : checklogs) {
                         String checkpointId = log.getCheckpoint() != null ? String.valueOf(log.getCheckpoint().getId()) : "";
@@ -103,7 +127,13 @@ public class CsvReportService {
                                 escapeCsv(roundId), escapeCsv(status), escapeCsv(start), escapeCsv(end),
                                 escapeCsv(checkpointId), escapeCsv(checkpointName), escapeCsv(scannedAt), escapeCsv(minsSince),
                                 escapeCsv(getIncidentesResumen(roundIncidents, log.getId())),
-                                escapeCsv(obs), escapeCsv(generatedAtStr)
+                                escapeCsv(obs), escapeCsv(generatedAtStr),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, log.getId(), "descripcionOriginal")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, log.getId(), "tipoIncidenteIA")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, log.getId(), "prioridadIA")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, log.getId(), "resumenIA")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, log.getId(), "accionSugeridaIA")),
+                                escapeCsv(getIncidentesCampoIA(roundIncidents, log.getId(), "requiereAtencionInmediata"))
                         ) + "\n");
                         rowCount++;
                     }
@@ -139,6 +169,46 @@ public class CsvReportService {
 
         return filtered.stream()
                 .map(i -> i.getTitle() + " - " + i.getDescription())
+                .collect(Collectors.joining("; "));
+    }
+
+    private String getIncidentesCampoIA(List<Incident> roundIncidents, Long checklogId, String campo) {
+        if (roundIncidents == null || roundIncidents.isEmpty()) return "";
+        
+        List<Incident> filtered;
+        if (checklogId != null) {
+             filtered = roundIncidents.stream()
+                .filter(i -> i.getChecklog() != null && i.getChecklog().getId().equals(checklogId))
+                .collect(Collectors.toList());
+        } else {
+             filtered = roundIncidents.stream()
+                .filter(i -> i.getChecklog() == null)
+                .collect(Collectors.toList());
+        }
+
+        if (filtered.isEmpty()) return "";
+
+        return filtered.stream()
+                .map(i -> {
+                    switch (campo) {
+                        case "descripcionOriginal":
+                            return i.getDescripcionOriginal() != null && !i.getDescripcionOriginal().trim().isEmpty()
+                                    ? i.getDescripcionOriginal()
+                                    : (i.getDescription() != null ? i.getDescription() : "");
+                        case "tipoIncidenteIA":
+                            return i.getTipoIncidenteIA() != null ? i.getTipoIncidenteIA() : "";
+                        case "prioridadIA":
+                            return i.getPrioridadIA() != null ? i.getPrioridadIA() : "";
+                        case "resumenIA":
+                            return i.getResumenIA() != null ? i.getResumenIA() : "";
+                        case "accionSugeridaIA":
+                            return i.getAccionSugeridaIA() != null ? i.getAccionSugeridaIA() : "";
+                        case "requiereAtencionInmediata":
+                            return i.getRequiereAtencionInmediata() != null ? i.getRequiereAtencionInmediata().toString() : "false";
+                        default:
+                            return "";
+                    }
+                })
                 .collect(Collectors.joining("; "));
     }
 

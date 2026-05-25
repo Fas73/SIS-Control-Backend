@@ -25,4 +25,15 @@ public class IncidentDTO {
     private String username;
     private String clientName;
     private String checkpointName;
+
+    // --- NUEVOS CAMPOS PARA ANALISIS IA GEMINI (MVP) ---
+    private String descripcionOriginal;
+    private String tipoIncidenteIA;
+    private String prioridadIA;
+    private String resumenIA;
+    private String accionSugeridaIA;
+    private Boolean requiereAtencionInmediata;
+    private String estadoAnalisisIA;
+    private LocalDateTime fechaAnalisisIA;
+    private String modeloIA;
 }

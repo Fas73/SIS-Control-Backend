@@ -1,0 +1,13 @@
+# =============================================================
+# PLANTILLA DE CONFIGURACIÓN LOCAL — NO VERSIONAR EL ARCHIVO REAL
+# =============================================================
+# Copia este archivo como: application-local.properties
+# Pega tu API Key de Google AI Studio / Gemini en la línea de abajo.
+#
+# Obtén tu key gratuita en: https://aistudio.google.com/app/apikey
+#
+# IMPORTANTE: application-local.properties está en .gitignore.
+# NUNCA versiones el archivo con la key real.
+# =============================================================
+
+gemini.api.key=PEGA_AQUI_TU_API_KEY_DE_GEMINI
