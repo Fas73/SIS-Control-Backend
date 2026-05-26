@@ -25,5 +25,4 @@ public class IncidentDTO {
     private String username;
     private String clientName;
     private String checkpointName;
-    private Integer checkpointOrder;
 }

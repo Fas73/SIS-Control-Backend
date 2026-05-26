@@ -75,4 +75,10 @@ public class RoundController {
     public ResponseEntity<?> obtenerEstadoActual(@PathVariable Long userId) {
         return ResponseEntity.ok(roundService.verificarEstadoActual(userId));
     }
+
+    // --- RECUPERACIÓN DE ESTADO PARA LA APP MÓVIL ---
+    @GetMapping("/estado-actual/{userId}")
+    public ResponseEntity<?> obtenerEstadoActual(@PathVariable Long userId) {
+        return ResponseEntity.ok(roundService.verificarEstadoActual(userId));
+    }
 }

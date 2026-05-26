@@ -28,9 +28,6 @@ public class IncidentService {
     @Autowired
     private ChecklogRepository checklogRepository;
 
-    @Autowired
-    private AlertService alertService;
-
     @Transactional
     public IncidentDTO reportarIncidente(IncidentDTO dto) {
         IncidentType tipoFinal;
@@ -58,8 +55,7 @@ public class IncidentService {
         entity.setRoundExecution(round);
         entity.setChecklog(log);
 
-        // Se envía a través de alertService para disparar los WebSockets/SSE en vivo hacia los paneles conectados
-        Incident saved = alertService.registrarYDispararAlerta(entity);
+        Incident saved = incidentRepository.save(entity);
         return convertirADTO(saved);
     }
 
@@ -77,10 +73,12 @@ public class IncidentService {
         return convertirADTO(incidente);
     }
 
+    // Expone un punto de acceso público del mapper para controladores externos
     public IncidentDTO forzarMapeoDirecto(Incident i) {
         return this.convertirADTO(i);
     }
 
+    // --- METODO DE MAPEÓ CORREGIDO CON CRUCE DE TEXTO COMPLETO ---
     private IncidentDTO convertirADTO(Incident i) {
         IncidentDTO dto = new IncidentDTO();
         dto.setId(i.getId());
@@ -92,6 +90,7 @@ public class IncidentService {
         dto.setCreatedAt(i.getCreatedAt());
         dto.setStatus(i.getStatus());
 
+        // Desglose relacional para evitar nulos y mapear nombres reales a Android
         if (i.getRoundExecution() != null) {
             dto.setRoundExecutionId(i.getRoundExecution().getId());
 
@@ -99,22 +98,14 @@ public class IncidentService {
                 dto.setUsername(i.getRoundExecution().getWorker().getFullName());
             }
             if (i.getRoundExecution().getInstallation() != null) {
-                dto.setClientName(i.getRoundExecution().getInstallation().getName());
+                dto.setClientName(i.getRoundExecution().getInstallation().getClientName());
             }
         }
 
         if (i.getChecklog() != null) {
             dto.setChecklogId(i.getChecklog().getId());
-
             if (i.getChecklog().getCheckpoint() != null) {
-                com.siscontrol.backend.models.Checkpoint cp = i.getChecklog().getCheckpoint();
-
-                dto.setCheckpointName(cp.getName());
-                dto.setCheckpointOrder(cp.getExecutionOrder());
-
-                if (cp.getNfcTagCode() != null && dto.getDescription() != null && !dto.getDescription().contains("NFC Tag:")) {
-                    dto.setDescription(dto.getDescription() + "\nNFC Tag: " + cp.getNfcTagCode());
-                }
+                dto.setCheckpointName(i.getChecklog().getCheckpoint().getName());
             }
         }
 
