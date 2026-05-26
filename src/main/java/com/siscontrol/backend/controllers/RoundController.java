@@ -62,9 +62,18 @@ public class RoundController {
         return ResponseEntity.ok(lista);
     }
 
+    // --- CAMBIO: SE AGREGA REQUESTER ID COMO PARÁMETRO OBLIGATORIO ---
     @GetMapping("/{id}")
-    public ResponseEntity<?> obtenerDetalle(@PathVariable Long id) {
-        return ResponseEntity.ok(roundService.obtenerDetalleRonda(id));
+    public ResponseEntity<?> obtenerDetalle(
+            @PathVariable Long id,
+            @RequestParam Long requesterId) {
+        return ResponseEntity.ok(roundService.obtenerDetalleRonda(id, requesterId));
+    }
+
+    // --- RECUPERACIÓN DE ESTADO PARA LA APP MÓVIL ---
+    @GetMapping("/estado-actual/{userId}")
+    public ResponseEntity<?> obtenerEstadoActual(@PathVariable Long userId) {
+        return ResponseEntity.ok(roundService.verificarEstadoActual(userId));
     }
 
     // --- RECUPERACIÓN DE ESTADO PARA LA APP MÓVIL ---
