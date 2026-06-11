@@ -232,10 +232,7 @@ public class IncidentService {
         dto.setCreatedAt(i.getCreatedAt());
         dto.setStatus(i.getStatus());
 
-<<<<<<< HEAD
         // Desglose relacional para evitar nulos y mapear nombres reales a Android
-        if (i.getRoundExecution() != null) {
-=======
         if (i.getShiftId() != null || i.getType() == IncidentType.JORNADA) {
             Long sId = i.getShiftId();
             if (sId == null && i.getRoundExecution() != null) {
@@ -262,7 +259,6 @@ public class IncidentService {
                 }
             }
         } else if (i.getRoundExecution() != null) {
->>>>>>> b115204 (feat: implementar dashboard de supervisor, asignación de guardias y validaciones al finalizar jornada)
             dto.setRoundExecutionId(i.getRoundExecution().getId());
 
             if (i.getRoundExecution().getWorker() != null) {
@@ -283,13 +279,17 @@ public class IncidentService {
 
         if (i.getChecklog() != null) {
             dto.setChecklogId(i.getChecklog().getId());
-<<<<<<< HEAD
-=======
             dto.setChecklogImageUrl(i.getChecklog().getImageUrl()); // <- Agrega esto si quieres cruzar las fotos
 
->>>>>>> b115204 (feat: implementar dashboard de supervisor, asignación de guardias y validaciones al finalizar jornada)
             if (i.getChecklog().getCheckpoint() != null) {
-                dto.setCheckpointName(i.getChecklog().getCheckpoint().getName());
+                com.siscontrol.backend.models.Checkpoint cp = i.getChecklog().getCheckpoint();
+
+                dto.setCheckpointName(cp.getName());
+                dto.setCheckpointOrder(cp.getExecutionOrder());
+
+                if (cp.getNfcTagCode() != null && dto.getDescription() != null && !dto.getDescription().contains("NFC Tag:")) {
+                    dto.setDescription(dto.getDescription() + "\nNFC Tag: " + cp.getNfcTagCode());
+                }
             }
         }
 
