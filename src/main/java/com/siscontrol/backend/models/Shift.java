@@ -24,9 +24,18 @@ public class Shift {
     @JoinColumn(name = "user_id")
     private User worker;
 
+    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime entryTime;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime exitTime;
 
     @Enumerated(EnumType.STRING)
     private ShiftStatus status;
+
+    @Column(name = "latitude", nullable = true)
+    private Double latitude;
+
+    @Column(name = "longitude", nullable = true)
+    private Double longitude;
 }

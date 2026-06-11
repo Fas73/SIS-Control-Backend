@@ -16,4 +16,7 @@ public class CreateUserRequestDTO {
     private String fullName;
     private String phoneNumber;
     private UserRole role;
+
+    // NUEVO CAMPO: Para capturar la selfie de enrolamiento procesada por el teléfono
+    private String profileImageUrl;
 }

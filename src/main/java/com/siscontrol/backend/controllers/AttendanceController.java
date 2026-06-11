@@ -16,6 +16,7 @@ public class AttendanceController {
 
     @Autowired private InstallationService installationService;
     @Autowired private RoundService roundService;
+    @Autowired private com.siscontrol.backend.services.ReportService reportService;
 
     @PostMapping("/check-in")
     public ResponseEntity<?> registrarEntrada(@RequestBody CheckInRequestDTO request) {
@@ -25,8 +26,13 @@ public class AttendanceController {
 
     @PostMapping("/check-out")
     public ResponseEntity<?> registrarSalida(@RequestBody CheckOutRequestDTO request) {
-        validarUbicacion(request.getInstallationId(), request.getLatitude(), request.getLongitude());
-        return ResponseEntity.ok(roundService.finalizarJornada(request.getUserId(), request.getInstallationId()));
+        // Ya no bloqueamos la salida por distancia, pero pasamos las coordenadas reales al servicio para guardarlas.
+        return ResponseEntity.ok(roundService.finalizarJornada(request.getUserId(), request.getInstallationId(), request.getLatitude(), request.getLongitude()));
+    }
+
+    @GetMapping("/reporte-jornada/{shiftId}")
+    public ResponseEntity<com.siscontrol.backend.dto.ShiftReportDTO> obtenerReporteJornada(@PathVariable Long shiftId) {
+        return ResponseEntity.ok(reportService.obtenerReporteJornada(shiftId));
     }
 
     private void validarUbicacion(Long instId, Double lat, Double lon) {

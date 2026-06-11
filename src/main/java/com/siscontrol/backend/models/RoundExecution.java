@@ -21,12 +21,16 @@ public class RoundExecution {
     @JoinColumn(name = "installation_id")
     private Installation installation;
 
+    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startTime;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endTime;
 
     @Enumerated(EnumType.STRING)
     private RoundStatus status;
 
     // Campo unificado para comentarios finales u observaciones
+    @Column(columnDefinition = "LONGTEXT")
     private String observations;
 }

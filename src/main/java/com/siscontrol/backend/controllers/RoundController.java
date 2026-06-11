@@ -19,8 +19,12 @@ public class RoundController {
     // --- CONTROL DE RONDAS ---
 
     @PostMapping("/iniciar")
-    public ResponseEntity<?> iniciarRonda(@RequestParam Long userId, @RequestParam Long installationId) {
-        return new ResponseEntity<>(roundService.iniciarRonda(userId, installationId), HttpStatus.CREATED);
+    public ResponseEntity<?> iniciarRonda(
+            @RequestParam Long userId,
+            @RequestParam Long installationId,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude) {
+        return new ResponseEntity<>(roundService.iniciarRonda(userId, installationId, latitude, longitude), HttpStatus.CREATED);
     }
 
     @PutMapping("/finalizar/{id}")

@@ -11,4 +11,6 @@ import java.util.List;
 @Repository
 public interface SupervisorGuardRepository extends JpaRepository<SupervisorGuard, SupervisorGuardId> {
     List<SupervisorGuard> findBySupervisor(User supervisor);
+    List<SupervisorGuard> findBySupervisorId(Long supervisorId);
+    java.util.Optional<SupervisorGuard> findByGuardId(Long guardId);
 }

@@ -28,6 +28,7 @@ public class ReportService {
     @Autowired private ChecklogRepository checklogRepository;
     @Autowired private IncidentRepository incidentRepository;
     @Autowired private InstallationRepository installationRepository;
+    @Autowired private SupervisorGuardRepository supervisorGuardRepository;
 
     // 1. Metodo de estadísticas globales (Dashboard General)
     public Map<String, Object> obtenerEstadisticasGlobales(LocalDateTime inicio, LocalDateTime fin) {
@@ -238,11 +239,21 @@ public class ReportService {
                     String location = s.getInstallation() != null ? s.getInstallation().getName() : "Sin ubicación";
                     String entryTime = s.getEntryTime() != null ? s.getEntryTime().toString() : "N/A";
 
+                    Double lat = s.getLatitude();
+                    Double lon = s.getLongitude();
+
+                    if ((lat == null || lat == 0.0 || lon == null || lon == 0.0) && s.getInstallation() != null) {
+                        lat = s.getInstallation().getLatitude();
+                        lon = s.getInstallation().getLongitude();
+                    }
+
                     return new DashboardActiveShiftDTO(
                             s.getId(),
                             guardName,
                             location,
-                            entryTime
+                            entryTime,
+                            lat,
+                            lon
                     );
                 }).toList();
 
@@ -250,6 +261,259 @@ public class ReportService {
                 totalGuards, activeShiftsCount, totalRoundsToday, roundsInProgress, roundsCompleted,
                 totalIncidents, pendingIncidents, totalInstallations, activeInstallationsCount,
                 activeRoundsList, activeShiftsList
+        );
+    }
+
+    public AdminDashboardDTO obtenerDashboardSupervisor(Long supervisorId) {
+        LocalDateTime inicioHoy = LocalDateTime.of(java.time.LocalDate.now(), java.time.LocalTime.MIN);
+        LocalDateTime finHoy = LocalDateTime.of(java.time.LocalDate.now(), java.time.LocalTime.MAX);
+
+        // 1. Obtener los IDs de los guardias asignados a este supervisor
+        List<Long> assignedGuardIds = supervisorGuardRepository.findBySupervisorId(supervisorId)
+                .stream()
+                .map(sg -> sg.getGuard().getId())
+                .collect(Collectors.toList());
+
+        int totalGuards = assignedGuardIds.size();
+
+        // Si no tiene guardias, devolvemos un dashboard vacío pero con instalaciones globales si es necesario
+        // En este caso, mostraremos 0 para todo excepto las instalaciones en las que podrían estar trabajando
+        
+        List<Shift> todasLasJornadas = shiftRepository.findAll().stream()
+                .filter(s -> s.getWorker() != null && assignedGuardIds.contains(s.getWorker().getId()))
+                .toList();
+                
+        int activeShiftsCount = (int) todasLasJornadas.stream()
+                .filter(s -> s.getStatus() == ShiftStatus.EN_CURSO)
+                .count();
+
+        List<RoundExecution> todasLasRondas = roundExecutionRepository.findAll().stream()
+                .filter(r -> r.getWorker() != null && assignedGuardIds.contains(r.getWorker().getId()))
+                .toList();
+                
+        List<RoundExecution> rondasDeHoy = todasLasRondas.stream()
+                .filter(r -> r.getStartTime() != null && !r.getStartTime().isBefore(inicioHoy) && !r.getStartTime().isAfter(finHoy))
+                .toList();
+
+        int totalRoundsToday = rondasDeHoy.size();
+        int roundsInProgress = (int) rondasDeHoy.stream().filter(r -> r.getStatus() == RoundStatus.EN_PROGRESO).count();
+        int roundsCompleted = (int) rondasDeHoy.stream().filter(r -> r.getStatus() == RoundStatus.FINALIZADA).count();
+
+        // Filtramos incidentes que ocurran en los shifts o rondas de estos guardias
+        List<Long> shiftIds = todasLasJornadas.stream().map(Shift::getId).toList();
+        List<Long> roundIds = todasLasRondas.stream().map(RoundExecution::getId).toList();
+        
+        List<Incident> todosLosIncidentes = incidentRepository.findAll().stream()
+                .filter(i -> (i.getShiftId() != null && shiftIds.contains(i.getShiftId())) || 
+                             (i.getRoundExecution() != null && roundIds.contains(i.getRoundExecution().getId())))
+                .toList();
+                
+        int totalIncidents = todosLosIncidentes.size();
+        int pendingIncidents = (int) todosLosIncidentes.stream().filter(i -> i.getStatus() == 0).count();
+
+        // Opcional: mostrar solo instalaciones donde haya jornadas activas de sus guardias
+        List<Long> activeInstallationIds = todasLasJornadas.stream()
+                .filter(s -> s.getStatus() == ShiftStatus.EN_CURSO && s.getInstallation() != null)
+                .map(s -> s.getInstallation().getId())
+                .distinct()
+                .toList();
+
+        int activeInstallationsCount = activeInstallationIds.size();
+        // Dejamos el total de instalaciones como las activas para no confundir con las globales
+        int totalInstallations = activeInstallationsCount; 
+
+        List<DashboardActiveRoundDTO> activeRoundsList = todasLasRondas.stream()
+                .filter(r -> r.getStatus() == RoundStatus.EN_PROGRESO)
+                .map(r -> {
+                    String guardName = r.getWorker() != null ? r.getWorker().getFullName() : "Desconocido";
+                    String location = r.getInstallation() != null ? r.getInstallation().getName() : "Ubicación desconocida";
+                    float progreso = 0.5f;
+
+                    return new DashboardActiveRoundDTO(
+                            r.getId(),
+                            guardName,
+                            location,
+                            progreso,
+                            "En progreso",
+                            r.getStatus().name()
+                    );
+                }).toList();
+
+        List<DashboardActiveShiftDTO> activeShiftsList = todasLasJornadas.stream()
+                .filter(s -> s.getStatus() == ShiftStatus.EN_CURSO)
+                .map(s -> {
+                    String guardName = s.getWorker() != null ? s.getWorker().getFullName() : "Desconocido";
+                    String location = s.getInstallation() != null ? s.getInstallation().getName() : "Sin ubicación";
+                    String entryTime = s.getEntryTime() != null ? s.getEntryTime().toString() : "N/A";
+
+                    Double lat = s.getLatitude();
+                    Double lon = s.getLongitude();
+
+                    if ((lat == null || lat == 0.0 || lon == null || lon == 0.0) && s.getInstallation() != null) {
+                        lat = s.getInstallation().getLatitude();
+                        lon = s.getInstallation().getLongitude();
+                    }
+
+                    return new DashboardActiveShiftDTO(
+                            s.getId(),
+                            guardName,
+                            location,
+                            entryTime,
+                            lat,
+                            lon
+                    );
+                }).toList();
+
+        return new AdminDashboardDTO(
+                totalGuards, activeShiftsCount, totalRoundsToday, roundsInProgress, roundsCompleted,
+                totalIncidents, pendingIncidents, totalInstallations, activeInstallationsCount,
+                activeRoundsList, activeShiftsList
+        );
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public com.siscontrol.backend.dto.ShiftReportDTO obtenerReporteJornada(Long shiftId) {
+        Shift shift = shiftRepository.findById(shiftId)
+                .orElseThrow(() -> new ResourceNotFoundException("Jornada (Shift) no encontrada con ID: " + shiftId));
+
+        User worker = shift.getWorker();
+        Installation inst = shift.getInstallation();
+
+        String workerName = worker != null ? worker.getFullName() : "Desconocido";
+        String installationName = inst != null ? inst.getName() : "Desconocida";
+
+        // Obtener rondas asociadas en la ventana del turno
+        List<RoundExecution> rounds = roundExecutionRepository.findRoundsForShift(
+                worker != null ? worker.getId() : null,
+                inst != null ? inst.getId() : null,
+                shift.getEntryTime(),
+                shift.getExitTime()
+        );
+
+        // Contar checkpoints activos de la instalación
+        int totalCheckpointsOfInstallation = 0;
+        if (inst != null) {
+            totalCheckpointsOfInstallation = (int) checkpointRepository.countByInstallationIdAndStatus(inst.getId(), 1);
+        }
+
+        // Calcular total planificado: 1 ronda por hora de turno (mínimo 1)
+        int totalRoundsPlanned = 12; // default
+        if (shift.getEntryTime() != null) {
+            LocalDateTime end = shift.getExitTime() != null ? shift.getExitTime() : LocalDateTime.now();
+            long hours = Duration.between(shift.getEntryTime(), end).toHours();
+            totalRoundsPlanned = hours > 0 ? (int) hours : 1;
+        }
+
+        int totalRoundsExecuted = rounds.size();
+
+        // Armar detalles de las rondas
+        List<com.siscontrol.backend.dto.ShiftReportDTO.RoundDetailDTO> rondasDTO = new ArrayList<>();
+        int totalPuntosEscaneados = 0;
+        int totalPuntosOmitidos = 0;
+
+        for (RoundExecution r : rounds) {
+            List<Checklog> checklogs = checklogRepository.findByRoundExecutionId(r.getId());
+            List<Incident> incidents = incidentRepository.findByRoundExecutionId(r.getId());
+
+            int escaneados = 0;
+            int omitidos = 0;
+            List<com.siscontrol.backend.dto.ShiftReportDTO.ChecklogDetailDTO> checklogsDTO = new ArrayList<>();
+            for (Checklog log : checklogs) {
+                if (log.getStatus() != null) {
+                    if (log.getStatus() == 1) {
+                        escaneados++;
+                        totalPuntosEscaneados++;
+                    } else if (log.getStatus() == 2) {
+                        omitidos++;
+                        totalPuntosOmitidos++;
+                    }
+                }
+                String checkpointName = log.getCheckpoint() != null ? log.getCheckpoint().getName() : "Desconocido";
+                checklogsDTO.add(new com.siscontrol.backend.dto.ShiftReportDTO.ChecklogDetailDTO(
+                        checkpointName,
+                        log.getStatus(),
+                        log.getScannedAt(),
+                        log.getImageUrl()
+                ));
+            }
+
+            List<com.siscontrol.backend.dto.ShiftReportDTO.IncidentDetailDTO> incidentesDTO = new ArrayList<>();
+            for (Incident inc : incidents) {
+                incidentesDTO.add(new com.siscontrol.backend.dto.ShiftReportDTO.IncidentDetailDTO(
+                        inc.getId(),
+                        inc.getTitle(),
+                        inc.getDescription(),
+                        inc.getSeverity(),
+                        inc.getImageUrl(),
+                        inc.getCreatedAt(),
+                        inc.getStatus()
+                ));
+            }
+
+            // Calcular estado de la ronda
+            String statusStr = "INCOMPLETA";
+            if (r.getStatus() == RoundStatus.EN_PROGRESO) {
+                statusStr = "EN_PROGRESO";
+            } else if (totalCheckpointsOfInstallation > 0 && (escaneados + omitidos) >= totalCheckpointsOfInstallation) {
+                statusStr = "COMPLETADA";
+            }
+
+            rondasDTO.add(new com.siscontrol.backend.dto.ShiftReportDTO.RoundDetailDTO(
+                    r.getId(),
+                    r.getStartTime(),
+                    r.getEndTime(),
+                    r.getObservations(),
+                    statusStr,
+                    checklogsDTO,
+                    incidentesDTO
+            ));
+        }
+
+        // Buscar todos los incidentes asociados al shift o a las rondas del shift para el reporte de nivel superior
+        List<Incident> shiftIncidentsList = new ArrayList<>();
+        List<Incident> byShiftId = incidentRepository.findByShiftId(shiftId);
+        shiftIncidentsList.addAll(byShiftId);
+
+        List<Long> roundIds = rounds.stream().map(RoundExecution::getId).toList();
+        List<Incident> byRounds = incidentRepository.findByRoundExecutionIdIn(roundIds).stream()
+                .filter(i -> !shiftIncidentsList.contains(i))
+                .toList();
+        shiftIncidentsList.addAll(byRounds);
+
+        List<com.siscontrol.backend.dto.ShiftReportDTO.IncidentDetailDTO> shiftIncidentesDTO = new ArrayList<>();
+        for (Incident inc : shiftIncidentsList) {
+            shiftIncidentesDTO.add(new com.siscontrol.backend.dto.ShiftReportDTO.IncidentDetailDTO(
+                    inc.getId(),
+                    inc.getTitle(),
+                    inc.getDescription(),
+                    inc.getSeverity(),
+                    inc.getImageUrl(),
+                    inc.getCreatedAt(),
+                    inc.getStatus()
+            ));
+        }
+
+        int totalAlertasGeneradas = shiftIncidentsList.size();
+        int puntosTotales = totalRoundsExecuted * totalCheckpointsOfInstallation;
+
+        com.siscontrol.backend.dto.ShiftReportDTO.MetricsDTO metricas = new com.siscontrol.backend.dto.ShiftReportDTO.MetricsDTO(
+                puntosTotales,
+                totalPuntosEscaneados,
+                totalPuntosOmitidos,
+                totalAlertasGeneradas
+        );
+
+        return new com.siscontrol.backend.dto.ShiftReportDTO(
+                shift.getId(),
+                workerName,
+                installationName,
+                shift.getEntryTime(),
+                shift.getExitTime(),
+                totalRoundsPlanned,
+                totalRoundsExecuted,
+                rondasDTO,
+                shiftIncidentesDTO,
+                metricas
         );
     }
 

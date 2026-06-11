@@ -5,5 +5,7 @@ public enum IncidentType {
     VANDALISMO,
     HALLAZGO,
     MANTENCION,
-    OTRO
+    OTRO,
+    RONDA,
+    JORNADA
 }
