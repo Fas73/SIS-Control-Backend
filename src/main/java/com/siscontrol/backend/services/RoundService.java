@@ -27,8 +27,6 @@ public class RoundService {
     @Autowired private InstallationRepository installationRepository;
     @Autowired private AlertService alertService;
 
-    @Autowired private AlertService alertService;
-
     // --- JORNADAS (ASISTENCIA) ---
 
     @Transactional
@@ -543,59 +541,7 @@ public class RoundService {
         return estado;
     }
 
-    // --- AUTOMATIZACIÓN: DETECCIÓN DE INACTIVIDAD ---
-    @Scheduled(fixedRate = 300000)
-    @Transactional
-    public void verificarRondasInactivas() {
-        LocalDateTime limiteInactividad = LocalDateTime.now().minusMinutes(15);
 
-        List<RoundExecution> rondasActivas = roundExecutionRepository.findByStatus(RoundStatus.EN_PROGRESO);
-
-        for (RoundExecution ronda : rondasActivas) {
-            List<Checklog> escaneos = checklogRepository.findByRoundExecutionId(ronda.getId());
-
-            LocalDateTime ultimaActivity = ronda.getStartTime();
-            if (!escaneos.isEmpty()) {
-                escaneos.sort((c1, c2) -> c2.getScannedAt().compareTo(c1.getScannedAt()));
-                ultimaActivity = escaneos.get(0).getScannedAt();
-            }
-
-            if (ultimaActivity.isBefore(limiteInactividad)) {
-                List<Incident> incidentesExistentes = incidentRepository.findByRoundExecutionId(ronda.getId());
-                boolean yaAlertado = incidentesExistentes.stream()
-                        .anyMatch(i -> i.getTitle().equals("Alerta: Ronda Incompleta"));
-
-                if (!yaAlertado) {
-                    Incident advertencia = new Incident();
-                    advertencia.setTitle("Alerta: Ronda Incompleta");
-                    advertencia.setDescription("Se ha detectado inactividad prolongada en " + ronda.getInstallation().getName() + " (más de 15 minutos sin registrar lecturas NFC).");
-                    advertencia.setSeverity("Media");
-                    advertencia.setStatus(0);
-                    advertencia.setType(com.siscontrol.backend.enums.IncidentType.MANTENCION);
-                    advertencia.setRoundExecution(ronda);
-
-                    alertService.registrarYDispararAlerta(advertencia);
-                }
-            }
-        }
-    }
-
-    // --- ESTADO EN TIEMPO REAL ---
-    public Map<String, Object> verificarEstadoActual(Long userId) {
-        Optional<Shift> jornadaOpt = shiftRepository.findByWorkerIdAndStatus(userId, ShiftStatus.EN_CURSO);
-
-        Optional<RoundExecution> rondaOpt = roundExecutionRepository.findAll().stream()
-                .filter(r -> r.getWorker() != null && r.getWorker().getId().equals(userId) && r.getStatus() == RoundStatus.EN_PROGRESO)
-                .findFirst();
-
-        Map<String, Object> estado = new HashMap<>();
-        estado.put("jornadaActiva", jornadaOpt.isPresent());
-        estado.put("rondaActiva", rondaOpt.isPresent());
-        estado.put("jornada", jornadaOpt.orElse(null));
-        estado.put("ronda", rondaOpt.orElse(null));
-
-        return estado;
-    }
 
     // --- AUTOMATIZACIÓN: DETECCIÓN DE INACTIVIDAD (Pestaña Advertencia) ---
     @Scheduled(fixedRate = 300000) // Se ejecuta automáticamente cada 5 minutos

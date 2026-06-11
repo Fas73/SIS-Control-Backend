@@ -1,6 +1,7 @@
 package com.siscontrol.backend.controllers;
 
 import com.siscontrol.backend.models.Checklog;
+import com.siscontrol.backend.dto.RoundHistoryItemDTO;
 import com.siscontrol.backend.services.RoundService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -72,12 +73,6 @@ public class RoundController {
             @PathVariable Long id,
             @RequestParam Long requesterId) {
         return ResponseEntity.ok(roundService.obtenerDetalleRonda(id, requesterId));
-    }
-
-    // --- RECUPERACIÓN DE ESTADO PARA LA APP MÓVIL ---
-    @GetMapping("/estado-actual/{userId}")
-    public ResponseEntity<?> obtenerEstadoActual(@PathVariable Long userId) {
-        return ResponseEntity.ok(roundService.verificarEstadoActual(userId));
     }
 
     // --- RECUPERACIÓN DE ESTADO PARA LA APP MÓVIL ---
