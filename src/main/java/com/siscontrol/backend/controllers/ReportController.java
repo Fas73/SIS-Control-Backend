@@ -7,8 +7,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import com.siscontrol.backend.dto.AdminDashboardDTO;
-import com.siscontrol.backend.dto.DashboardActiveRoundDTO;
-import com.siscontrol.backend.dto.DashboardActiveShiftDTO;
 
 @RestController
 @RequestMapping("/api/reportes")
@@ -58,6 +56,11 @@ public class ReportController {
     @GetMapping("/dashboard-admin")
     public ResponseEntity<AdminDashboardDTO> obtenerDashboardAdmin() {
         return ResponseEntity.ok(reportService.obtenerDashboardAdmin());
+    }
+
+    @GetMapping("/dashboard-supervisor/{supervisorId}")
+    public ResponseEntity<AdminDashboardDTO> obtenerDashboardSupervisor(@PathVariable Long supervisorId) {
+        return ResponseEntity.ok(reportService.obtenerDashboardSupervisor(supervisorId));
     }
 
 }

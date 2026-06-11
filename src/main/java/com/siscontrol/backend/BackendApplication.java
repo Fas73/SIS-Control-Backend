@@ -25,7 +25,8 @@ public class BackendApplication {
 
 	/**
 	 * Este metodo se ejecuta antes que cualquier otra lógica en Spring.
-	 * Fuerza a la Máquina Virtual de Java (JVM) a trabajar en la Zona Horaria de Chile.
+	 * Fuerza a la Máquina Virtual de Java (JVM) a trabajar en la Zona Horaria de
+	 * Chile.
 	 */
 	@PostConstruct
 	public void init() {

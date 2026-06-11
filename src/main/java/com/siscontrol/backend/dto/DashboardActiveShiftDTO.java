@@ -12,4 +12,6 @@ public class DashboardActiveShiftDTO {
     private String guardName;
     private String location;
     private String entryTime;
+    private Double latitude;
+    private Double longitude;
 }

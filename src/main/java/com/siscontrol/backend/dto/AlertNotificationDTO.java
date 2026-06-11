@@ -18,9 +18,11 @@ public class AlertNotificationDTO {
     private Integer status;
     private Long roundExecutionId;
     private String username;       // Nombre del guardia que ejecuta la ronda
+    private String checklogImageUrl;
 
     // --- LOS DATOS CRUZADOS QUE SOLICITAS ---
     private String checkpointName;     // de la tabla checkpoints
     private Integer executionOrder;    // de la tabla checkpoints
-    private String clientName;         // de la tabla installations
+    private String clientName;       // de la tabla installations
+    private Long workerId;
 }

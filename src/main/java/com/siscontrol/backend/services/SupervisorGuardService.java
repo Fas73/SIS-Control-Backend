@@ -1,6 +1,5 @@
 package com.siscontrol.backend.services;
 
-import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
 
@@ -54,6 +53,10 @@ public class SupervisorGuardService {
             throw new BadRequestException("La relación supervisor-guardia ya existe");
         }
 
+        if (supervisorGuardRepository.findByGuardId(guardId).isPresent()) {
+            throw new BadRequestException("Este guardia ya se encuentra asignado a otro supervisor. Debe desasignarlo primero.");
+        }
+
         SupervisorGuard relacion = new SupervisorGuard();
         relacion.setId(relationId);
         relacion.setSupervisor(supervisor);
@@ -79,23 +82,13 @@ public class SupervisorGuardService {
         User supervisor = userRepository.findById(supervisorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supervisor no encontrado"));
 
-        List<SupervisorGuardResponseDTO> guardias = supervisorGuardRepository.findBySupervisor(supervisor)
+        return supervisorGuardRepository.findBySupervisor(supervisor)
                 .stream()
                 .map(relacion -> new SupervisorGuardResponseDTO(
                         userService.convertirAResponseDTO(relacion.getSupervisor()),
                         userService.convertirAResponseDTO(relacion.getGuard())
                 ))
                 .toList();
-
-        if (guardias.isEmpty()) {
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("mensaje", "El supervisor " + supervisor.getFullName() + " aún no tiene guardias asignados.");
-            response.put("guardias", guardias);
-            response.put("total", 0);
-            return response;
-        }
-
-        return guardias;
     }
 
     /**

@@ -62,6 +62,16 @@ public class AuthController {
         );
     }
 
+    @PostMapping("/check-username")
+    public ResponseEntity<?> checkUsername(@RequestBody Map<String, String> requestBody) {
+        String identifier = requestBody.get("username");
+        if (identifier == null || identifier.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("exists", false));
+        }
+        boolean exists = userRepository.findByUsernameOrEmail(identifier, identifier).isPresent();
+        return ResponseEntity.ok(Map.of("exists", exists));
+    }
+
     // --- ENDPOINT CORREGIDO PARA LOGRAR COMPATIBILIDAD ABSOLUTA ---
     // POST http://localhost:8080/api/auth/recuperar-acceso
     // Cuerpo JSON: { "email": "juan@correo.com" }
